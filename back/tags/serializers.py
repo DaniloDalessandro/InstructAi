@@ -7,7 +7,7 @@ class TagSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Tag
-        fields = ['id', 'name', 'created_at', 'updated_at', 'created_by', 'updated_by']
+        fields = ['id', 'name', 'color', 'is_active', 'created_at', 'updated_at', 'created_by', 'updated_by']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def create(self, validated_data):

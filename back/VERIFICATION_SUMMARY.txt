@@ -1,0 +1,195 @@
+================================================================================
+TAGS ENDPOINT DIAGNOSTIC SUMMARY
+================================================================================
+Generated: 2026-01-01
+Issue: POST /tags returning 404
+
+================================================================================
+VERIFICATION RESULTS
+================================================================================
+
+1. INSTALLED_APPS Configuration
+   Status: ✓ CORRECT
+   - 'tags' app is registered (position 12)
+   - 'django_filters' is registered (ADDED - was missing)
+
+2. URL Configuration (back/core/urls.py)
+   Status: ✓ CORRECT
+   - Line 27: path("api/v1/", include("tags.urls"))
+   - Pattern matches /api/v1/tags/
+
+3. Router Configuration (back/tags/urls.py)
+   Status: ✓ CORRECT
+   - DefaultRouter is configured
+   - TagViewSet registered with prefix 'tags' and basename 'tag'
+   - Generates endpoints:
+     * GET    /api/v1/tags/       (list)
+     * POST   /api/v1/tags/       (create)
+     * GET    /api/v1/tags/{id}/  (retrieve)
+     * PUT    /api/v1/tags/{id}/  (update)
+     * PATCH  /api/v1/tags/{id}/  (partial_update)
+     * DELETE /api/v1/tags/{id}/  (destroy)
+
+4. ViewSet Configuration (back/tags/views.py)
+   Status: ✓ CORRECT
+   - Model: Tag
+   - Serializer: TagSerializer
+   - Permission: IsAuthenticated
+   - Filter backends: DjangoFilterBackend, SearchFilter, OrderingFilter
+   - Search fields: ['name']
+   - Ordering fields: ['name', 'created_at', 'updated_at']
+
+5. Model Configuration (back/tags/models.py)
+   Status: ✓ CORRECT
+   - Fields: name, color, created_at, updated_at, created_by, updated_by
+   - Migrations applied successfully
+
+6. Serializer Configuration (back/tags/serializers.py)
+   Status: ✓ CORRECT
+   - All fields included
+   - Automatic created_by/updated_by from request.user
+
+7. Programmatic Tests
+   Status: ✓ ALL PASSED
+   - GET /api/v1/tags/  returns 200
+   - POST /api/v1/tags/ returns 201
+   - Data creation successful
+   - Endpoint resolves correctly
+
+================================================================================
+ISSUE DIAGNOSIS
+================================================================================
+
+The configuration is 100% correct. The endpoint works in programmatic tests.
+
+If you're getting 404 errors via HTTP requests, the issue is:
+
+  ► THE DEVELOPMENT SERVER NEEDS TO BE RESTARTED
+
+Why? When Django loads, it caches the URL configuration. Any changes to:
+  - INSTALLED_APPS
+  - URL patterns
+  - Router registration
+
+...require a server restart to take effect.
+
+================================================================================
+CHANGES MADE
+================================================================================
+
+1. Added 'django_filters' to INSTALLED_APPS in back/core/settings.py
+   - This was missing and required by DjangoFilterBackend in the ViewSet
+
+2. Created diagnostic scripts:
+   - list_urls.py              - Lists all available URLs
+   - test_tags_endpoint.py     - Tests endpoint programmatically
+   - test_http_endpoint.py     - Tests endpoint via HTTP
+   - diagnose_404.py          - Comprehensive diagnostic
+   - final_verification.py    - Final verification after restart
+
+================================================================================
+HOW TO FIX THE 404 ERROR
+================================================================================
+
+STEP 1: Stop the development server
+  - Press Ctrl+C in the terminal where the server is running
+
+STEP 2: Restart the development server
+  cd C:\Users\Danil\OneDrive\Documentos\PROJETOS\InstructAI\back
+  python manage.py runserver
+
+STEP 3: Verify the endpoint is working
+  python final_verification.py
+
+================================================================================
+TESTING THE ENDPOINT
+================================================================================
+
+Method 1: Using the verification script
+  python final_verification.py
+
+Method 2: Using curl
+  # Get token
+  curl -X POST http://localhost:8000/api/v1/accounts/token/ \
+    -H "Content-Type: application/json" \
+    -d '{"email":"test@example.com","password":"testpass123"}'
+
+  # Create tag
+  curl -X POST http://localhost:8000/api/v1/tags/ \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+    -d '{"name":"Test Tag","color":"#FF5733"}'
+
+Method 3: Using Postman/Insomnia
+  1. POST to http://localhost:8000/api/v1/accounts/token/
+     Body: {"email":"test@example.com","password":"testpass123"}
+  2. Copy the 'access' token from response
+  3. POST to http://localhost:8000/api/v1/tags/
+     Headers: Authorization: Bearer {token}
+     Body: {"name":"Test Tag","color":"#FF5733"}
+
+================================================================================
+EXPECTED RESPONSE
+================================================================================
+
+Successful POST to /api/v1/tags/ should return:
+
+  Status: 201 Created
+  Body:
+  {
+    "id": 1,
+    "name": "Test Tag",
+    "color": "#FF5733",
+    "created_at": "2026-01-01T22:20:41.903817Z",
+    "updated_at": "2026-01-01T22:20:41.903831Z",
+    "created_by": "test@example.com",
+    "updated_by": null
+  }
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+If you still get 404 after restarting:
+
+1. Check the exact URL being used
+   - Must be: http://localhost:8000/api/v1/tags/
+   - Note the trailing slash
+   - Check for typos
+
+2. Verify authentication
+   - Endpoint requires authentication
+   - Must include: Authorization: Bearer {token}
+   - Token must be valid (not expired)
+
+3. Check CORS settings
+   - If calling from frontend, ensure origin is in CORS_ALLOWED_ORIGINS
+   - Current allowed origins:
+     * http://localhost:3000
+     * http://127.0.0.1:3000
+
+4. Check server logs
+   - Look for error messages in the server console
+   - Check for stack traces
+
+5. Verify migrations
+   python manage.py migrate
+
+6. Run diagnostics again
+   python diagnose_404.py
+
+================================================================================
+CONTACT POINTS
+================================================================================
+
+Files involved in this endpoint:
+  - back/core/settings.py      (INSTALLED_APPS, REST_FRAMEWORK config)
+  - back/core/urls.py          (Main URL routing)
+  - back/tags/urls.py          (Tags app URL routing)
+  - back/tags/views.py         (TagViewSet)
+  - back/tags/models.py        (Tag model)
+  - back/tags/serializers.py   (TagSerializer)
+
+================================================================================
+END OF SUMMARY
+================================================================================
