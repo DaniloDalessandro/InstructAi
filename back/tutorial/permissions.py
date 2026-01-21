@@ -1,10 +1,10 @@
 from rest_framework import permissions
 
 
-class IsAuthorOrStaffOrReadOnly(permissions.BasePermission):
+class IsOwnerOrReadOnly(permissions.BasePermission):
     """
-    Custom permission to only allow authors or staff to edit tutorials.
-    Read-only permissions are allowed for published tutorials.
+    Custom permission to only allow creators or staff to edit tutorials.
+    Read-only permissions are allowed for active tutorials.
     """
 
     def has_permission(self, request, view):
@@ -12,7 +12,7 @@ class IsAuthorOrStaffOrReadOnly(permissions.BasePermission):
         if request.method == 'POST':
             return request.user and request.user.is_authenticated
 
-        # Allow read for everyone (will check object permission for unpublished)
+        # Allow read for everyone (will check object permission for inactive)
         if request.method in permissions.SAFE_METHODS:
             return True
 
@@ -20,35 +20,20 @@ class IsAuthorOrStaffOrReadOnly(permissions.BasePermission):
         return request.user and request.user.is_authenticated
 
     def has_object_permission(self, request, view, obj):
-        # Read permissions for published tutorials
+        # Read permissions for active tutorials
         if request.method in permissions.SAFE_METHODS:
-            # Allow if published, or if user is author/staff
-            if obj.is_published:
+            # Allow if active, or if user is creator/staff
+            if obj.is_active:
                 return True
-            return request.user and (obj.author == request.user or request.user.is_staff)
+            return request.user and (obj.created_by == request.user or request.user.is_staff)
 
-        # Write permissions only for author or staff
-        return request.user and (obj.author == request.user or request.user.is_staff)
+        # Write permissions only for creator or staff
+        return request.user and (obj.created_by == request.user or request.user.is_staff)
 
 
-class IsStaffOrReadOnly(permissions.BasePermission):
+class IsOwnerOrStaff(permissions.BasePermission):
     """
-    Custom permission to only allow staff to create/edit.
-    Read permissions are allowed to everyone.
-    """
-
-    def has_permission(self, request, view):
-        # Read permissions for everyone
-        if request.method in permissions.SAFE_METHODS:
-            return True
-
-        # Write permissions only for staff
-        return request.user and request.user.is_staff
-
-
-class IsAuthorOrStaff(permissions.BasePermission):
-    """
-    Permission to only allow authors of a tutorial or staff to access/edit.
+    Permission to only allow creators of a tutorial or staff to access/edit.
     Used for tutorial steps and media (inherits parent tutorial permission).
     """
 
@@ -61,5 +46,5 @@ class IsAuthorOrStaff(permissions.BasePermission):
         else:
             return False
 
-        # Allow access if user is author or staff
-        return request.user and (tutorial.author == request.user or request.user.is_staff)
+        # Allow access if user is creator or staff
+        return request.user and (tutorial.created_by == request.user or request.user.is_staff)

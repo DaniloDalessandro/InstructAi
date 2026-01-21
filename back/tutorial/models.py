@@ -4,81 +4,40 @@ from django.utils import timezone
 from django.conf import settings
 
 
-class KnowledgeArea(models.Model):
-    """Knowledge area for categorizing tutorials (e.g., Programming, Design, Business)"""
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=255, verbose_name="Nome")
-    description = models.TextField(blank=True, null=True, verbose_name="Descrição")
-    created_at = models.DateTimeField(default=timezone.now, verbose_name="Criado em")
-    updated_at = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
-
-    class Meta:
-        verbose_name = "Área de Conhecimento"
-        verbose_name_plural = "Áreas de Conhecimento"
-        ordering = ['name']
-
-    def __str__(self):
-        return self.name
-
-
-class TutorialTag(models.Model):
-    """Tags for tutorials (e.g., Python, React, Beginner-Friendly)"""
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=100, unique=True, verbose_name="Nome")
-    created_at = models.DateTimeField(default=timezone.now, verbose_name="Criado em")
-
-    class Meta:
-        verbose_name = "Tag"
-        verbose_name_plural = "Tags"
-        ordering = ['name']
-
-    def __str__(self):
-        return self.name
-
-
 class Tutorial(models.Model):
     """Main tutorial model"""
-    DIFFICULTY_CHOICES = [
-        ('iniciante', 'Iniciante'),
-        ('intermediario', 'Intermediário'),
-        ('avancado', 'Avançado'),
-    ]
-
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=255, verbose_name="Título")
     description = models.TextField(verbose_name="Descrição")
-    knowledge_area = models.ForeignKey(
-        KnowledgeArea,
+    sector = models.ForeignKey(
+        'sectors.Sector',
         on_delete=models.PROTECT,
         related_name='tutorials',
-        verbose_name="Área de Conhecimento"
+        verbose_name="Setor"
     )
-    author = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='tutorials',
-        verbose_name="Autor"
-    )
-    is_published = models.BooleanField(default=False, verbose_name="Publicado")
-    difficulty_level = models.CharField(
-        max_length=20,
-        choices=DIFFICULTY_CHOICES,
-        default='iniciante',
-        verbose_name="Nível de Dificuldade"
-    )
-    estimated_time = models.IntegerField(
-        help_text="Tempo estimado em minutos",
-        verbose_name="Tempo Estimado (min)"
-    )
-    created_at = models.DateTimeField(default=timezone.now, verbose_name="Criado em")
-    updated_at = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
-    published_at = models.DateTimeField(blank=True, null=True, verbose_name="Publicado em")
     tags = models.ManyToManyField(
-        TutorialTag,
+        'tags.Tag',
         related_name='tutorials',
         blank=True,
         verbose_name="Tags"
     )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='created_tutorials',
+        verbose_name="Criado por"
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='updated_tutorials',
+        null=True,
+        blank=True,
+        verbose_name="Atualizado por"
+    )
+    is_active = models.BooleanField(default=True, verbose_name="Ativo")
+    created_at = models.DateTimeField(default=timezone.now, verbose_name="Criado em")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
 
     class Meta:
         verbose_name = "Tutorial"
@@ -92,19 +51,6 @@ class Tutorial(models.Model):
     def step_count(self):
         """Returns the number of steps in this tutorial"""
         return self.steps.count()
-
-    def publish(self):
-        """Publish the tutorial"""
-        if not self.is_published:
-            self.is_published = True
-            self.published_at = timezone.now()
-            self.save()
-
-    def unpublish(self):
-        """Unpublish the tutorial"""
-        if self.is_published:
-            self.is_published = False
-            self.save()
 
 
 class TutorialStep(models.Model):

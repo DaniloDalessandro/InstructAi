@@ -1,97 +1,71 @@
 from django.contrib import admin
-from .models import KnowledgeArea, TutorialTag, Tutorial, TutorialStep, TutorialMedia
+from .models import Tutorial, TutorialStep, TutorialMedia
 
 
 class TutorialStepInline(admin.TabularInline):
-    """Inline admin for tutorial steps"""
+    """Inline for Tutorial Steps"""
     model = TutorialStep
-    extra = 1
+    extra = 0
     fields = ['order', 'title', 'content']
     ordering = ['order']
 
 
 class TutorialMediaInline(admin.TabularInline):
-    """Inline admin for step media"""
+    """Inline for Tutorial Media"""
     model = TutorialMedia
     extra = 0
-    fields = ['media_type', 'file', 'embed_url', 'caption', 'order']
+    fields = ['media_type', 'file', 'embed_url', 'order']
     ordering = ['order']
-
-
-@admin.register(KnowledgeArea)
-class KnowledgeAreaAdmin(admin.ModelAdmin):
-    list_display = ['name', 'created_at', 'updated_at']
-    search_fields = ['name', 'description']
-    readonly_fields = ['id', 'created_at', 'updated_at']
-
-
-@admin.register(TutorialTag)
-class TutorialTagAdmin(admin.ModelAdmin):
-    list_display = ['name', 'created_at']
-    search_fields = ['name']
-    readonly_fields = ['id', 'created_at']
 
 
 @admin.register(Tutorial)
 class TutorialAdmin(admin.ModelAdmin):
-    list_display = ['title', 'author', 'knowledge_area', 'difficulty_level', 'is_published', 'created_at']
-    list_filter = ['is_published', 'difficulty_level', 'knowledge_area', 'created_at']
-    search_fields = ['title', 'description', 'author__email', 'author__name']
-    readonly_fields = ['id', 'created_at', 'updated_at', 'published_at', 'step_count']
+    """Admin for Tutorial model"""
+    list_display = ['title', 'sector', 'created_by', 'is_active', 'step_count', 'created_at']
+    list_filter = ['sector', 'tags', 'is_active', 'created_at']
+    search_fields = ['title', 'description']
     filter_horizontal = ['tags']
+    readonly_fields = ['created_by', 'created_at', 'updated_at', 'step_count']
     inlines = [TutorialStepInline]
 
     fieldsets = (
         ('Informações Básicas', {
-            'fields': ('id', 'title', 'description', 'author')
+            'fields': ('title', 'description', 'sector', 'tags')
         }),
-        ('Categorização', {
-            'fields': ('knowledge_area', 'tags', 'difficulty_level', 'estimated_time')
+        ('Status', {
+            'fields': ('is_active',)
         }),
-        ('Publicação', {
-            'fields': ('is_published', 'published_at')
-        }),
-        ('Timestamps', {
-            'fields': ('created_at', 'updated_at', 'step_count'),
+        ('Auditoria', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
             'classes': ('collapse',)
         }),
     )
 
-    def step_count(self, obj):
-        """Display the number of steps"""
-        return obj.step_count
-    step_count.short_description = 'Número de Passos'
-
-    actions = ['publish_tutorials', 'unpublish_tutorials']
-
-    def publish_tutorials(self, request, queryset):
-        """Bulk publish tutorials"""
-        for tutorial in queryset:
-            tutorial.publish()
-        self.message_user(request, f'{queryset.count()} tutorial(s) publicado(s) com sucesso.')
-    publish_tutorials.short_description = 'Publicar tutoriais selecionados'
-
-    def unpublish_tutorials(self, request, queryset):
-        """Bulk unpublish tutorials"""
-        for tutorial in queryset:
-            tutorial.unpublish()
-        self.message_user(request, f'{queryset.count()} tutorial(s) despublicado(s) com sucesso.')
-    unpublish_tutorials.short_description = 'Despublicar tutoriais selecionados'
+    def save_model(self, request, obj, form, change):
+        """Set created_by on creation"""
+        if not change:
+            obj.created_by = request.user
+        obj.updated_by = request.user
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(TutorialStep)
 class TutorialStepAdmin(admin.ModelAdmin):
+    """Admin for TutorialStep model"""
     list_display = ['tutorial', 'order', 'title', 'created_at']
     list_filter = ['tutorial', 'created_at']
-    search_fields = ['title', 'content', 'tutorial__title']
-    readonly_fields = ['id', 'created_at', 'updated_at']
+    search_fields = ['title', 'content']
+    readonly_fields = ['created_at', 'updated_at']
     inlines = [TutorialMediaInline]
 
     fieldsets = (
-        ('Informações do Passo', {
-            'fields': ('id', 'tutorial', 'order', 'title', 'content')
+        ('Tutorial', {
+            'fields': ('tutorial', 'order')
         }),
-        ('Timestamps', {
+        ('Conteúdo', {
+            'fields': ('title', 'content')
+        }),
+        ('Auditoria', {
             'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)
         }),
@@ -100,23 +74,19 @@ class TutorialStepAdmin(admin.ModelAdmin):
 
 @admin.register(TutorialMedia)
 class TutorialMediaAdmin(admin.ModelAdmin):
+    """Admin for TutorialMedia model"""
     list_display = ['step', 'media_type', 'order', 'created_at']
     list_filter = ['media_type', 'created_at']
-    search_fields = ['step__title', 'caption']
-    readonly_fields = ['id', 'created_at', 'updated_at']
+    readonly_fields = ['created_at', 'updated_at']
 
     fieldsets = (
-        ('Informações da Mídia', {
-            'fields': ('id', 'step', 'media_type', 'order')
+        ('Passo', {
+            'fields': ('step', 'order')
         }),
-        ('Arquivo/URL', {
-            'fields': ('file', 'embed_url', 'caption')
+        ('Mídia', {
+            'fields': ('media_type', 'file', 'embed_url', 'caption', 'annotations')
         }),
-        ('Anotações', {
-            'fields': ('annotations',),
-            'classes': ('collapse',)
-        }),
-        ('Timestamps', {
+        ('Auditoria', {
             'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)
         }),

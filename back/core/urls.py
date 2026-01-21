@@ -26,6 +26,8 @@ urlpatterns = [
     path("api/v1/tutorials/", include("tutorial.urls")),
     path("api/v1/", include("tags.urls")),
     path("api/v1/", include("sectors.urls")),
+    path("api/v1/", include("manual.urls")),
+    path("api/v1/", include("courses.urls")),
 ]
 
 # Serve media files in development

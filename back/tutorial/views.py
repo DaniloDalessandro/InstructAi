@@ -1,312 +1,142 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db import transaction
-from django.db.models import Max
-from .models import KnowledgeArea, TutorialTag, Tutorial, TutorialStep, TutorialMedia
+from django_filters.rest_framework import DjangoFilterBackend
+from django.db.models import Count
+
+from .models import Tutorial, TutorialStep, TutorialMedia
 from .serializers import (
-    KnowledgeAreaSerializer,
-    TutorialTagSerializer,
     TutorialListSerializer,
     TutorialDetailSerializer,
     TutorialCreateUpdateSerializer,
-    TutorialPublishSerializer,
     TutorialStepSerializer,
     TutorialStepCreateUpdateSerializer,
     TutorialMediaSerializer,
 )
-from .permissions import IsAuthorOrStaffOrReadOnly, IsStaffOrReadOnly, IsAuthorOrStaff
-
-
-class KnowledgeAreaViewSet(viewsets.ModelViewSet):
-    """ViewSet for Knowledge Areas"""
-    queryset = KnowledgeArea.objects.all()
-    serializer_class = KnowledgeAreaSerializer
-    permission_classes = [IsStaffOrReadOnly]
-
-    def get_queryset(self):
-        """Order by name"""
-        return KnowledgeArea.objects.all().order_by('name')
-
-
-class TutorialTagViewSet(viewsets.ModelViewSet):
-    """ViewSet for Tutorial Tags"""
-    queryset = TutorialTag.objects.all()
-    serializer_class = TutorialTagSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        """Order by name"""
-        return TutorialTag.objects.all().order_by('name')
+from .permissions import IsOwnerOrReadOnly, IsOwnerOrStaff
 
 
 class TutorialViewSet(viewsets.ModelViewSet):
-    """ViewSet for Tutorials"""
-    permission_classes = [IsAuthorOrStaffOrReadOnly]
+    """
+    ViewSet for Tutorial model.
+
+    list: Return a list of all tutorials (filtered by active status for non-owners)
+    retrieve: Get a specific tutorial
+    create: Create a new tutorial
+    update: Update a tutorial (owner or staff only)
+    partial_update: Partially update a tutorial (owner or staff only)
+    destroy: Delete a tutorial (owner or staff only)
+    """
+    permission_classes = [IsOwnerOrReadOnly]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['sector', 'tags', 'is_active']
+    search_fields = ['title', 'description']
+    ordering_fields = ['created_at', 'updated_at', 'title']
+    ordering = ['-created_at']
 
     def get_queryset(self):
-        """
-        Filter tutorials based on user permissions.
-        - Staff: see all tutorials
-        - Authors: see own tutorials
-        - Others: see only published tutorials
-        """
-        queryset = Tutorial.objects.prefetch_related('tags', 'steps', 'knowledge_area', 'author')
+        """Return tutorials based on user permissions"""
+        queryset = Tutorial.objects.select_related('sector', 'created_by').prefetch_related('tags')
+        queryset = queryset.annotate(step_count=Count('steps'))
 
-        if self.request.user.is_staff:
-            # Staff can see all tutorials
-            return queryset.all()
-        elif self.request.user.is_authenticated:
-            # Authenticated users can see published tutorials and their own
-            from django.db.models import Q
-            return queryset.filter(
-                Q(is_published=True) | Q(author=self.request.user)
-            )
-        else:
-            # Anonymous users can only see published tutorials
-            return queryset.filter(is_published=True)
+        # If user is not authenticated or not staff, only show active tutorials
+        if not self.request.user.is_authenticated or not self.request.user.is_staff:
+            queryset = queryset.filter(is_active=True)
+
+        return queryset
 
     def get_serializer_class(self):
         """Return appropriate serializer based on action"""
         if self.action == 'list':
             return TutorialListSerializer
-        elif self.action == 'retrieve':
-            return TutorialDetailSerializer
-        elif self.action in ['publish', 'unpublish']:
-            return TutorialPublishSerializer
-        else:
+        elif self.action in ['create', 'update', 'partial_update']:
             return TutorialCreateUpdateSerializer
-
-    def perform_create(self, serializer):
-        """Set the author to the current user"""
-        serializer.save(author=self.request.user)
-
-    @action(detail=True, methods=['post'])
-    def publish(self, request, pk=None):
-        """Publish a tutorial"""
-        tutorial = self.get_object()
-
-        # Check permissions
-        if tutorial.author != request.user and not request.user.is_staff:
-            return Response(
-                {'detail': 'Você não tem permissão para publicar este tutorial.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        # Validate tutorial has at least one step
-        if tutorial.steps.count() == 0:
-            return Response(
-                {'detail': 'Tutorial deve ter pelo menos um passo antes de ser publicado.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Publish the tutorial
-        tutorial.publish()
-
-        serializer = self.get_serializer(tutorial)
-        return Response({
-            'detail': 'Tutorial publicado com sucesso!',
-            'tutorial': TutorialDetailSerializer(tutorial, context={'request': request}).data
-        })
-
-    @action(detail=True, methods=['post'])
-    def unpublish(self, request, pk=None):
-        """Unpublish a tutorial"""
-        tutorial = self.get_object()
-
-        # Check permissions
-        if tutorial.author != request.user and not request.user.is_staff:
-            return Response(
-                {'detail': 'Você não tem permissão para despublicar este tutorial.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        # Unpublish the tutorial
-        tutorial.unpublish()
-
-        return Response({
-            'detail': 'Tutorial despublicado com sucesso!',
-            'tutorial': TutorialDetailSerializer(tutorial, context={'request': request}).data
-        })
-
-    @action(detail=True, methods=['post'])
-    def duplicate(self, request, pk=None):
-        """Duplicate a tutorial as a draft"""
-        original = self.get_object()
-
-        with transaction.atomic():
-            # Create new tutorial
-            new_tutorial = Tutorial.objects.create(
-                title=f"{original.title} (Cópia)",
-                description=original.description,
-                knowledge_area=original.knowledge_area,
-                author=request.user,
-                difficulty_level=original.difficulty_level,
-                estimated_time=original.estimated_time,
-                is_published=False
-            )
-
-            # Copy tags
-            new_tutorial.tags.set(original.tags.all())
-
-            # Copy steps
-            for step in original.steps.all():
-                new_step = TutorialStep.objects.create(
-                    tutorial=new_tutorial,
-                    order=step.order,
-                    title=step.title,
-                    content=step.content
-                )
-
-                # Copy media
-                for media in step.media.all():
-                    TutorialMedia.objects.create(
-                        step=new_step,
-                        media_type=media.media_type,
-                        file=media.file,
-                        embed_url=media.embed_url,
-                        caption=media.caption,
-                        annotations=media.annotations,
-                        order=media.order
-                    )
-
-        return Response({
-            'detail': 'Tutorial duplicado com sucesso!',
-            'tutorial': TutorialDetailSerializer(new_tutorial, context={'request': request}).data
-        }, status=status.HTTP_201_CREATED)
+        return TutorialDetailSerializer
 
 
 class TutorialStepViewSet(viewsets.ModelViewSet):
-    """ViewSet for Tutorial Steps (nested under tutorials)"""
-    permission_classes = [IsAuthorOrStaff]
+    """
+    ViewSet for TutorialStep model.
 
-    def get_queryset(self):
-        """Filter steps by tutorial"""
-        tutorial_pk = self.kwargs.get('tutorial_pk')
-        if tutorial_pk:
-            return TutorialStep.objects.filter(tutorial_id=tutorial_pk).order_by('order')
-        return TutorialStep.objects.all().order_by('order')
+    Allows creating, reading, updating, and deleting tutorial steps.
+    """
+    permission_classes = [IsAuthenticated, IsOwnerOrStaff]
+    queryset = TutorialStep.objects.select_related('tutorial').prefetch_related('media').all()
+    filter_backends = [filters.OrderingFilter]
+    ordering_fields = ['order', 'created_at']
+    ordering = ['order']
 
     def get_serializer_class(self):
-        """Return appropriate serializer"""
+        """Return appropriate serializer based on action"""
         if self.action in ['create', 'update', 'partial_update']:
             return TutorialStepCreateUpdateSerializer
         return TutorialStepSerializer
 
-    def perform_create(self, serializer):
-        """Set the tutorial when creating a step"""
-        tutorial_pk = self.kwargs.get('tutorial_pk')
-        tutorial = Tutorial.objects.get(pk=tutorial_pk)
+    def get_queryset(self):
+        """Filter steps by tutorial if provided"""
+        queryset = super().get_queryset()
+        tutorial_id = self.request.query_params.get('tutorial')
+        if tutorial_id:
+            queryset = queryset.filter(tutorial_id=tutorial_id)
+        return queryset
 
-        # Check permission
-        if tutorial.author != self.request.user and not self.request.user.is_staff:
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied('Você não tem permissão para adicionar passos a este tutorial.')
+    @action(detail=False, methods=['post'], url_path='reorder')
+    def reorder(self, request):
+        """
+        Reorder steps in a tutorial.
+        Expects: { "steps": [{"id": "uuid", "order": 1}, ...] }
+        """
+        steps_data = request.data.get('steps', [])
 
-        # Auto-increment order if not provided
-        if 'order' not in serializer.validated_data or serializer.validated_data['order'] is None:
-            max_order = tutorial.steps.aggregate(Max('order'))['order__max'] or 0
-            serializer.save(tutorial=tutorial, order=max_order + 1)
-        else:
-            serializer.save(tutorial=tutorial)
-
-    def perform_destroy(self, instance):
-        """Delete step and reorder remaining steps"""
-        tutorial = instance.tutorial
-        deleted_order = instance.order
-
-        # Delete the step
-        instance.delete()
-
-        # Reorder remaining steps
-        steps_to_reorder = tutorial.steps.filter(order__gt=deleted_order)
-        for step in steps_to_reorder:
-            step.order -= 1
-            step.save()
-
-    @action(detail=False, methods=['post'])
-    def reorder(self, request, tutorial_pk=None):
-        """Reorder tutorial steps"""
-        # Expected payload: [{'id': 'uuid', 'order': 1}, {'id': 'uuid', 'order': 2}, ...]
-        new_order = request.data.get('steps', [])
-
-        if not new_order:
+        if not steps_data:
             return Response(
-                {'detail': 'Lista de passos é obrigatória.'},
+                {'error': 'No steps data provided'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        with transaction.atomic():
-            for item in new_order:
-                step_id = item.get('id')
-                order = item.get('order')
+        # Update order for each step
+        updated_steps = []
+        for step_data in steps_data:
+            step_id = step_data.get('id')
+            new_order = step_data.get('order')
 
-                if not step_id or order is None:
-                    return Response(
-                        {'detail': 'Cada passo deve ter id e order.'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+            try:
+                step = TutorialStep.objects.get(id=step_id)
 
-                try:
-                    step = TutorialStep.objects.get(pk=step_id, tutorial_id=tutorial_pk)
-                    step.order = order
-                    step.save()
-                except TutorialStep.DoesNotExist:
-                    return Response(
-                        {'detail': f'Passo {step_id} não encontrado.'},
-                        status=status.HTTP_404_NOT_FOUND
-                    )
+                # Check permission
+                self.check_object_permissions(request, step)
 
-        return Response({'detail': 'Passos reordenados com sucesso!'})
+                step.order = new_order
+                step.save(update_fields=['order'])
+                updated_steps.append(step)
+            except TutorialStep.DoesNotExist:
+                return Response(
+                    {'error': f'Step with id {step_id} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+        serializer = TutorialStepSerializer(updated_steps, many=True, context={'request': request})
+        return Response(serializer.data)
 
 
 class TutorialMediaViewSet(viewsets.ModelViewSet):
-    """ViewSet for Tutorial Media (nested under steps)"""
+    """
+    ViewSet for TutorialMedia model.
+
+    Allows creating, reading, updating, and deleting tutorial media (images/videos).
+    """
+    permission_classes = [IsAuthenticated, IsOwnerOrStaff]
+    queryset = TutorialMedia.objects.select_related('step__tutorial').all()
     serializer_class = TutorialMediaSerializer
-    permission_classes = [IsAuthorOrStaff]
+    filter_backends = [filters.OrderingFilter]
+    ordering_fields = ['order', 'created_at']
+    ordering = ['order']
 
     def get_queryset(self):
-        """Filter media by step"""
-        step_pk = self.kwargs.get('step_pk')
-        if step_pk:
-            return TutorialMedia.objects.filter(step_id=step_pk).order_by('order')
-        return TutorialMedia.objects.all().order_by('order')
-
-    def perform_create(self, serializer):
-        """Set the step when creating media"""
-        step_pk = self.kwargs.get('step_pk')
-        step = TutorialStep.objects.get(pk=step_pk)
-
-        # Check permission
-        if step.tutorial.author != self.request.user and not self.request.user.is_staff:
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied('Você não tem permissão para adicionar mídia a este passo.')
-
-        # Auto-increment order if not provided
-        if 'order' not in serializer.validated_data or serializer.validated_data['order'] is None:
-            max_order = step.media.aggregate(Max('order'))['order__max'] or 0
-            serializer.save(step=step, order=max_order + 1)
-        else:
-            serializer.save(step=step)
-
-    @action(detail=True, methods=['patch'])
-    def update_annotations(self, request, pk=None, **kwargs):
-        """Update only the annotations field of a media item"""
-        media = self.get_object()
-        annotations = request.data.get('annotations')
-
-        if annotations is None:
-            return Response(
-                {'detail': 'Anotações são obrigatórias.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        media.annotations = annotations
-        media.save()
-
-        serializer = self.get_serializer(media)
-        return Response({
-            'detail': 'Anotações atualizadas com sucesso!',
-            'media': serializer.data
-        })
+        """Filter media by step if provided"""
+        queryset = super().get_queryset()
+        step_id = self.request.query_params.get('step')
+        if step_id:
+            queryset = queryset.filter(step_id=step_id)
+        return queryset
