@@ -8,8 +8,8 @@ from .serializers import SectorSerializer
 
 class SectorViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for Sector model
-    Provides CRUD operations for sectors with soft delete (inativação)
+    ViewSet para o modelo Sector.
+    Fornece operações CRUD com soft delete (inativação).
     """
     queryset = Sector.objects.all().order_by('-created_at')
     serializer_class = SectorSerializer

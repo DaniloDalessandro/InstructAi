@@ -3,7 +3,7 @@ from .models import Sector
 
 
 class SectorSerializer(serializers.ModelSerializer):
-    """Serializer for Sector model"""
+    """Serializer para o modelo Sector"""
 
     class Meta:
         model = Sector
@@ -11,14 +11,14 @@ class SectorSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def create(self, validated_data):
-        """Set created_by from request user"""
+        """Define created_by com o usuário da requisição"""
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
             validated_data['created_by'] = request.user.email
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        """Set updated_by from request user"""
+        """Define updated_by com o usuário da requisição"""
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
             validated_data['updated_by'] = request.user.email

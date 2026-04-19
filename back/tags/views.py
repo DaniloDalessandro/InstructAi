@@ -8,8 +8,8 @@ from .serializers import TagSerializer
 
 class TagViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for Tag model
-    Provides CRUD operations for tags with soft delete (inativação)
+    ViewSet para o modelo Tag.
+    Fornece operações CRUD com soft delete (inativação).
     """
     queryset = Tag.objects.all().order_by('-created_at')
     serializer_class = TagSerializer

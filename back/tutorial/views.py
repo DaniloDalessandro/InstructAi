@@ -19,14 +19,14 @@ from .permissions import IsOwnerOrReadOnly, IsOwnerOrStaff
 
 class TutorialViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for Tutorial model.
+    ViewSet para o modelo Tutorial.
 
-    list: Return a list of all tutorials (filtered by active status for non-owners)
-    retrieve: Get a specific tutorial
-    create: Create a new tutorial
-    update: Update a tutorial (owner or staff only)
-    partial_update: Partially update a tutorial (owner or staff only)
-    destroy: Delete a tutorial (owner or staff only)
+    list: Retorna lista de tutoriais (apenas ativos para não-owners)
+    retrieve: Obtém um tutorial específico
+    create: Cria novo tutorial
+    update: Atualiza tutorial (owner ou staff)
+    partial_update: Atualiza parcialmente (owner ou staff)
+    destroy: Remove tutorial (owner ou staff)
     """
     permission_classes = [IsOwnerOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -36,18 +36,18 @@ class TutorialViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
 
     def get_queryset(self):
-        """Return tutorials based on user permissions"""
+        """Retorna tutoriais de acordo com as permissões do usuário"""
         queryset = Tutorial.objects.select_related('sector', 'created_by').prefetch_related('tags')
-        queryset = queryset.annotate(step_count=Count('steps'))
+        queryset = queryset.annotate(steps_total=Count('steps'))
 
-        # If user is not authenticated or not staff, only show active tutorials
+        # Usuários não autenticados ou sem staff veem apenas tutoriais ativos
         if not self.request.user.is_authenticated or not self.request.user.is_staff:
             queryset = queryset.filter(is_active=True)
 
         return queryset
 
     def get_serializer_class(self):
-        """Return appropriate serializer based on action"""
+        """Retorna o serializer adequado para cada ação"""
         if self.action == 'list':
             return TutorialListSerializer
         elif self.action in ['create', 'update', 'partial_update']:
@@ -57,9 +57,8 @@ class TutorialViewSet(viewsets.ModelViewSet):
 
 class TutorialStepViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for TutorialStep model.
-
-    Allows creating, reading, updating, and deleting tutorial steps.
+    ViewSet para o modelo TutorialStep.
+    Permite criação, leitura, atualização e remoção de passos de tutoriais.
     """
     permission_classes = [IsAuthenticated, IsOwnerOrStaff]
     queryset = TutorialStep.objects.select_related('tutorial').prefetch_related('media').all()
@@ -68,13 +67,13 @@ class TutorialStepViewSet(viewsets.ModelViewSet):
     ordering = ['order']
 
     def get_serializer_class(self):
-        """Return appropriate serializer based on action"""
+        """Retorna o serializer adequado para cada ação"""
         if self.action in ['create', 'update', 'partial_update']:
             return TutorialStepCreateUpdateSerializer
         return TutorialStepSerializer
 
     def get_queryset(self):
-        """Filter steps by tutorial if provided"""
+        """Filtra passos por tutorial quando o parâmetro é fornecido"""
         queryset = super().get_queryset()
         tutorial_id = self.request.query_params.get('tutorial')
         if tutorial_id:
@@ -84,47 +83,51 @@ class TutorialStepViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='reorder')
     def reorder(self, request):
         """
-        Reorder steps in a tutorial.
-        Expects: { "steps": [{"id": "uuid", "order": 1}, ...] }
+        Reordena passos de um tutorial.
+        Entrada esperada: { "steps": [{"id": "uuid", "order": 1}, ...] }
         """
+        from django.db import transaction
+
         steps_data = request.data.get('steps', [])
 
         if not steps_data:
             return Response(
-                {'error': 'No steps data provided'},
+                {'error': 'Nenhum dado de passos fornecido'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Update order for each step
-        updated_steps = []
+        # Validar permissões e coletar os passos antes de alterar
+        step_updates = []
         for step_data in steps_data:
             step_id = step_data.get('id')
             new_order = step_data.get('order')
-
             try:
                 step = TutorialStep.objects.get(id=step_id)
-
-                # Check permission
                 self.check_object_permissions(request, step)
-
-                step.order = new_order
-                step.save(update_fields=['order'])
-                updated_steps.append(step)
+                step_updates.append((step, new_order))
             except TutorialStep.DoesNotExist:
                 return Response(
-                    {'error': f'Step with id {step_id} not found'},
+                    {'error': f'Passo com id {step_id} não encontrado'},
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-        serializer = TutorialStepSerializer(updated_steps, many=True, context={'request': request})
+        # Usar ordens negativas temporárias para evitar conflito de unique_together
+        with transaction.atomic():
+            for step, _ in step_updates:
+                step.order = -(step.order + 10000)
+                step.save(update_fields=['order'])
+            for step, new_order in step_updates:
+                step.order = new_order
+                step.save(update_fields=['order'])
+
+        serializer = TutorialStepSerializer([s for s, _ in step_updates], many=True, context={'request': request})
         return Response(serializer.data)
 
 
 class TutorialMediaViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for TutorialMedia model.
-
-    Allows creating, reading, updating, and deleting tutorial media (images/videos).
+    ViewSet para o modelo TutorialMedia.
+    Permite criação, leitura, atualização e remoção de mídias dos passos.
     """
     permission_classes = [IsAuthenticated, IsOwnerOrStaff]
     queryset = TutorialMedia.objects.select_related('step__tutorial').all()
@@ -134,7 +137,7 @@ class TutorialMediaViewSet(viewsets.ModelViewSet):
     ordering = ['order']
 
     def get_queryset(self):
-        """Filter media by step if provided"""
+        """Filtra mídias por passo quando o parâmetro é fornecido"""
         queryset = super().get_queryset()
         step_id = self.request.query_params.get('step')
         if step_id:

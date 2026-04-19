@@ -3,42 +3,39 @@ from rest_framework import permissions
 
 class IsOwnerOrReadOnly(permissions.BasePermission):
     """
-    Custom permission to only allow creators or staff to edit tutorials.
-    Read-only permissions are allowed for active tutorials.
+    Permissão customizada para tutoriais.
+    Permite leitura de tutoriais ativos para todos.
+    Apenas o criador ou staff pode editar/deletar.
     """
 
     def has_permission(self, request, view):
-        # Allow authenticated users to create
-        if request.method == 'POST':
-            return request.user and request.user.is_authenticated
-
-        # Allow read for everyone (will check object permission for inactive)
+        # Leitura é permitida para todos
         if request.method in permissions.SAFE_METHODS:
             return True
 
-        # Require authentication for other methods
+        # Criação e demais métodos requerem autenticação
         return request.user and request.user.is_authenticated
 
     def has_object_permission(self, request, view, obj):
-        # Read permissions for active tutorials
+        # Tutoriais ativos podem ser lidos por qualquer pessoa
         if request.method in permissions.SAFE_METHODS:
-            # Allow if active, or if user is creator/staff
             if obj.is_active:
                 return True
+            # Tutoriais inativos só podem ser vistos pelo criador ou staff
             return request.user and (obj.created_by == request.user or request.user.is_staff)
 
-        # Write permissions only for creator or staff
+        # Escrita apenas para criador ou staff
         return request.user and (obj.created_by == request.user or request.user.is_staff)
 
 
 class IsOwnerOrStaff(permissions.BasePermission):
     """
-    Permission to only allow creators of a tutorial or staff to access/edit.
-    Used for tutorial steps and media (inherits parent tutorial permission).
+    Permissão para passos e mídias de tutoriais.
+    Apenas o criador do tutorial pai ou staff pode acessar/editar.
     """
 
     def has_object_permission(self, request, view, obj):
-        # Get the parent tutorial
+        # Obter o tutorial pai
         if hasattr(obj, 'tutorial'):
             tutorial = obj.tutorial
         elif hasattr(obj, 'step'):
@@ -46,5 +43,5 @@ class IsOwnerOrStaff(permissions.BasePermission):
         else:
             return False
 
-        # Allow access if user is creator or staff
+        # Acesso apenas para criador ou staff
         return request.user and (tutorial.created_by == request.user or request.user.is_staff)

@@ -1,12 +1,11 @@
 from rest_framework import serializers
-from django.conf import settings
 from .models import Tutorial, TutorialStep, TutorialMedia
 from sectors.serializers import SectorSerializer
 from tags.serializers import TagSerializer
 
 
 class TutorialMediaSerializer(serializers.ModelSerializer):
-    """Serializer for Tutorial Media (images/videos)"""
+    """Serializer para mídias do tutorial (imagens e vídeos)"""
     file_url = serializers.SerializerMethodField()
 
     class Meta:
@@ -18,7 +17,7 @@ class TutorialMediaSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def get_file_url(self, obj):
-        """Return the full URL for the file"""
+        """Retorna a URL completa do arquivo"""
         if obj.file:
             request = self.context.get('request')
             if request:
@@ -28,7 +27,7 @@ class TutorialMediaSerializer(serializers.ModelSerializer):
 
 
 class TutorialStepSerializer(serializers.ModelSerializer):
-    """Serializer for Tutorial Step with nested media"""
+    """Serializer para passo do tutorial com mídias aninhadas"""
     media = TutorialMediaSerializer(many=True, read_only=True)
     media_count = serializers.SerializerMethodField()
 
@@ -41,12 +40,12 @@ class TutorialStepSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def get_media_count(self, obj):
-        """Return the number of media items in this step"""
+        """Retorna a quantidade de mídias no passo"""
         return obj.media.count()
 
 
 class TutorialListSerializer(serializers.ModelSerializer):
-    """Serializer for listing tutorials (card display)"""
+    """Serializer para listagem de tutoriais (exibição em cards)"""
     created_by_name = serializers.CharField(source='created_by.name', read_only=True)
     sector_detail = SectorSerializer(source='sector', read_only=True)
     tags_detail = TagSerializer(many=True, source='tags', read_only=True)
@@ -63,7 +62,7 @@ class TutorialListSerializer(serializers.ModelSerializer):
 
 
 class TutorialDetailSerializer(serializers.ModelSerializer):
-    """Serializer for detailed tutorial view with all steps and media"""
+    """Serializer para visualização detalhada do tutorial com passos e mídias"""
     created_by_name = serializers.CharField(source='created_by.name', read_only=True)
     created_by_email = serializers.CharField(source='created_by.email', read_only=True)
     sector_detail = SectorSerializer(source='sector', read_only=True)
@@ -83,7 +82,7 @@ class TutorialDetailSerializer(serializers.ModelSerializer):
 
 
 class TutorialCreateUpdateSerializer(serializers.ModelSerializer):
-    """Serializer for creating/updating tutorials"""
+    """Serializer para criação e atualização de tutoriais"""
 
     class Meta:
         model = Tutorial
@@ -91,7 +90,7 @@ class TutorialCreateUpdateSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
     def create(self, validated_data):
-        """Create tutorial with current user as creator"""
+        """Cria tutorial com o usuário atual como criador"""
         tags = validated_data.pop('tags', [])
         validated_data['created_by'] = self.context['request'].user
         tutorial = Tutorial.objects.create(**validated_data)
@@ -100,10 +99,8 @@ class TutorialCreateUpdateSerializer(serializers.ModelSerializer):
         return tutorial
 
     def update(self, instance, validated_data):
-        """Update tutorial"""
+        """Atualiza tutorial registrando o responsável pela alteração"""
         tags = validated_data.pop('tags', None)
-
-        # Update updated_by field
         validated_data['updated_by'] = self.context['request'].user
 
         for attr, value in validated_data.items():
@@ -118,7 +115,7 @@ class TutorialCreateUpdateSerializer(serializers.ModelSerializer):
 
 
 class TutorialStepCreateUpdateSerializer(serializers.ModelSerializer):
-    """Serializer for creating/updating tutorial steps"""
+    """Serializer para criação e atualização de passos do tutorial"""
 
     class Meta:
         model = TutorialStep

@@ -33,6 +33,9 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     date_joined = models.DateTimeField(default=timezone.now)
+    phone = models.CharField(max_length=20, blank=True, default='')
+    position = models.CharField(max_length=255, blank=True, default='')
+    avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)
 
     objects = CustomUserManager()
 
@@ -45,7 +48,3 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.email
-
-    @property
-    def is_authenticated(self):
-        return True

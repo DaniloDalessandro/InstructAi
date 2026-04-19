@@ -9,8 +9,8 @@ from .serializers import ManualSerializer
 
 class ManualViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for Manual model
-    Provides CRUD operations for manuals with file upload and soft delete
+    ViewSet para o modelo Manual.
+    Fornece operações CRUD com upload de arquivo PDF e soft delete (inativação).
     """
     queryset = Manual.objects.all().prefetch_related('sectors', 'tags')
     serializer_class = ManualSerializer
