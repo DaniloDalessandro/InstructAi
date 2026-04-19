@@ -38,7 +38,7 @@ class TutorialViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Retorna tutoriais de acordo com as permissões do usuário"""
         queryset = Tutorial.objects.select_related('sector', 'created_by').prefetch_related('tags')
-        queryset = queryset.annotate(steps_total=Count('steps'))
+        queryset = queryset.annotate(step_count=Count('steps'))
 
         # Usuários não autenticados ou sem staff veem apenas tutoriais ativos
         if not self.request.user.is_authenticated or not self.request.user.is_staff:

@@ -33,8 +33,11 @@ export async function getTutorials(params?: {
   if (params?.tags) {
     const tagList = Array.isArray(params.tags)
       ? params.tags
-      : params.tags.split(',').map(t => t.trim()).filter(Boolean);
-    tagList.forEach(tag => queryParams.append('tags', tag));
+      : params.tags.split(',').map(t => t.trim());
+    // Filtra valores falsy (vazio, undefined, null) para não enviar IDs inválidos
+    tagList.filter(t => t != null && String(t).trim() !== '').forEach(tag =>
+      queryParams.append('tags', String(tag))
+    );
   }
   if (params?.is_active) queryParams.append('is_active', params.is_active);
 
@@ -42,6 +45,10 @@ export async function getTutorials(params?: {
   const response = await authFetch(url);
 
   if (!response.ok) {
+    // Erros de validação de filtro (400) retornam lista vazia em vez de mostrar erro
+    if (response.status === 400) {
+      return { count: 0, next: null, previous: null, results: [] };
+    }
     throw new Error('Erro ao buscar tutoriais');
   }
 
