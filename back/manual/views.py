@@ -17,7 +17,7 @@ class ManualViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     parser_classes = (MultiPartParser, FormParser)
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['is_active', 'sectors', 'tags']
+    filterset_fields = ['is_active', 'sectors']
     search_fields = ['name']
     ordering_fields = ['name', 'created_at', 'updated_at']
     ordering = ['-created_at']
@@ -25,19 +25,27 @@ class ManualViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """
         Retorna queryset baseado nos filtros.
+        Tags são filtradas cumulativamente (AND): um manual precisa ter TODAS as tags
+        marcadas para aparecer no resultado.
         Se não houver filtro is_active, retorna apenas manuais ativos por padrão.
         """
         queryset = Manual.objects.all().prefetch_related('sectors', 'tags')
         is_active = self.request.query_params.get('is_active', None)
 
-        # Se não especificou filtro, mostrar apenas ativos por padrão
+        # Filtro de status
         if is_active is None:
             queryset = queryset.filter(is_active=True)
         elif is_active.lower() in ['true', '1', 'yes']:
             queryset = queryset.filter(is_active=True)
         elif is_active.lower() in ['false', '0', 'no']:
             queryset = queryset.filter(is_active=False)
-        # Se for outro valor (como "all"), retorna todos
+
+        # Filtro AND de tags: encadeia um filter por tag para garantir
+        # que o manual tenha TODAS as tags selecionadas
+        tag_ids = self.request.query_params.getlist('tags')
+        for tag_id in tag_ids:
+            if tag_id:
+                queryset = queryset.filter(tags__id=tag_id)
 
         return queryset.order_by('-created_at')
 
