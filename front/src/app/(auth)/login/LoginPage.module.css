@@ -1,0 +1,165 @@
+/* Container de animação de fundo */
+.animationContainer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Círculos de fundo decorativos */
+.backgroundCircle {
+  position: absolute;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1));
+  filter: blur(60px);
+  animation: float 20s ease-in-out infinite;
+}
+
+.circle1 {
+  width: 400px;
+  height: 400px;
+  top: -100px;
+  left: -100px;
+  animation-delay: 0s;
+}
+
+.circle2 {
+  width: 500px;
+  height: 500px;
+  bottom: -150px;
+  right: -150px;
+  animation-delay: 7s;
+}
+
+.circle3 {
+  width: 350px;
+  height: 350px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation-delay: 14s;
+}
+
+/* Partículas flutuantes */
+.particle {
+  position: absolute;
+  opacity: 0.15;
+  animation: particleFloat 25s ease-in-out infinite;
+}
+
+.particle:nth-child(4) {
+  top: 10%;
+  left: 15%;
+  animation-delay: 0s;
+}
+
+.particle:nth-child(5) {
+  top: 70%;
+  left: 10%;
+  animation-delay: 5s;
+}
+
+.particle:nth-child(6) {
+  top: 30%;
+  right: 20%;
+  animation-delay: 10s;
+}
+
+.particle:nth-child(7) {
+  bottom: 20%;
+  right: 15%;
+  animation-delay: 15s;
+}
+
+.particle:nth-child(8) {
+  top: 50%;
+  left: 5%;
+  animation-delay: 20s;
+}
+
+.particle:nth-child(9) {
+  top: 15%;
+  right: 10%;
+  animation-delay: 3s;
+}
+
+.particle:nth-child(10) {
+  bottom: 30%;
+  left: 25%;
+  animation-delay: 8s;
+}
+
+.particle:nth-child(11) {
+  top: 60%;
+  right: 30%;
+  animation-delay: 12s;
+}
+
+/* Ícones */
+.icon {
+  color: rgba(99, 102, 241, 0.4);
+  filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.3));
+}
+
+/* Animações */
+@keyframes float {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(30px, -30px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+}
+
+@keyframes particleFloat {
+  0%, 100% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 0.15;
+  }
+  25% {
+    transform: translate(20px, -40px) rotate(90deg);
+    opacity: 0.25;
+  }
+  50% {
+    transform: translate(-30px, -20px) rotate(180deg);
+    opacity: 0.15;
+  }
+  75% {
+    transform: translate(15px, 30px) rotate(270deg);
+    opacity: 0.2;
+  }
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .backgroundCircle {
+    filter: blur(40px);
+  }
+
+  .circle1,
+  .circle2 {
+    width: 300px;
+    height: 300px;
+  }
+
+  .circle3 {
+    width: 250px;
+    height: 250px;
+  }
+
+  .particle {
+    opacity: 0.1;
+  }
+
+  .icon {
+    width: 40px;
+    height: 40px;
+  }
+}

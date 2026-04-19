@@ -1,0 +1,116 @@
+"use client"
+
+import { ChevronRight, type LucideIcon } from "lucide-react"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
+import {
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+} from "@/components/ui/sidebar"
+
+export function NavMain({
+  items,
+  onFormAction,
+}: {
+  items: {
+    title: string
+    url: string
+    icon?: LucideIcon
+    isActive?: boolean
+    items?: {
+      title: string
+      url: string
+      action?: string
+    }[]
+  }[]
+  onFormAction?: (formType: string) => void
+}) {
+  const pathname = usePathname()
+
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel className="text-[11px] uppercase tracking-widest text-muted-foreground/60 px-3 mb-1">
+        Navegação
+      </SidebarGroupLabel>
+      <SidebarMenu>
+        {items.map((item) => {
+          // Determina se o item está ativo comparando o pathname atual
+          const isActive = pathname === item.url || pathname.startsWith(item.url + "/")
+
+          return item.items ? (
+            <Collapsible
+              key={item.title}
+              asChild
+              defaultOpen={item.isActive}
+              className="group/collapsible"
+            >
+              <SidebarMenuItem>
+                <CollapsibleTrigger asChild>
+                  <SidebarMenuButton tooltip={item.title}>
+                    {item.icon && <item.icon />}
+                    <span>{item.title}</span>
+                    <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                  </SidebarMenuButton>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <SidebarMenuSub>
+                    {item.items?.map((subItem) => (
+                      <SidebarMenuSubItem key={subItem.title}>
+                        <SidebarMenuSubButton asChild>
+                          {subItem.action ? (
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault()
+                                if (subItem.action) {
+                                  onFormAction?.(subItem.action)
+                                }
+                              }}
+                              className="w-full text-left"
+                            >
+                              <span>{subItem.title}</span>
+                            </button>
+                          ) : (
+                            <Link href={subItem.url}>
+                              <span>{subItem.title}</span>
+                            </Link>
+                          )}
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    ))}
+                  </SidebarMenuSub>
+                </CollapsibleContent>
+              </SidebarMenuItem>
+            </Collapsible>
+          ) : (
+            <SidebarMenuItem key={item.title}>
+              {/* isActive aplicado ao SidebarMenuButton para highlight visual correto */}
+              <SidebarMenuButton
+                asChild
+                tooltip={item.title}
+                isActive={isActive}
+                className="border-0 outline-0 ring-0 transition-colors duration-150"
+              >
+                <Link href={item.url} className="flex items-center gap-2">
+                  {item.icon && <item.icon className="shrink-0" />}
+                  <span>{item.title}</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )
+        })}
+      </SidebarMenu>
+    </SidebarGroup>
+  )
+}
