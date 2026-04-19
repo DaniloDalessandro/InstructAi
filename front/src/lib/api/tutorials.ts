@@ -21,7 +21,7 @@ export async function getTutorials(params?: {
   page_size?: number;
   search?: string;
   sector?: string;
-  tags?: string;
+  tags?: string | string[];
   is_active?: string;
 }): Promise<TutorialListResponse> {
   const queryParams = new URLSearchParams();
@@ -30,7 +30,12 @@ export async function getTutorials(params?: {
   if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
   if (params?.search) queryParams.append('search', params.search);
   if (params?.sector) queryParams.append('sector', params.sector);
-  if (params?.tags) queryParams.append('tags', params.tags);
+  if (params?.tags) {
+    const tagList = Array.isArray(params.tags)
+      ? params.tags
+      : params.tags.split(',').map(t => t.trim()).filter(Boolean);
+    tagList.forEach(tag => queryParams.append('tags', tag));
+  }
   if (params?.is_active) queryParams.append('is_active', params.is_active);
 
   const url = `${API_BASE_URL}/tutorials/${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;

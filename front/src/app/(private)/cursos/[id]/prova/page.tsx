@@ -214,7 +214,7 @@ export default function ExamPage() {
   // Tela de Resultado
   if (examFinished && examResult) {
     return (
-      <div className="container mx-auto p-6 max-w-2xl relative">
+      <div className="max-w-2xl mx-auto animate-fade-in">
         {/* Animação de Confetti quando aprovado */}
         {examResult.passed && (
           <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
@@ -402,11 +402,14 @@ export default function ExamPage() {
   // Tela Inicial - Antes de iniciar a prova
   if (!examStarted) {
     return (
-      <div className="container mx-auto p-6 max-w-2xl">
-        <Button variant="ghost" onClick={handleExit} className="mb-6">
-          <ChevronLeft className="mr-2 h-4 w-4" />
+      <div className="max-w-2xl mx-auto space-y-4 animate-fade-in">
+        <button
+          onClick={handleExit}
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
           Voltar ao Curso
-        </Button>
+        </button>
 
         <Card>
           <CardHeader>
@@ -461,7 +464,7 @@ export default function ExamPage() {
 
   return (
     <>
-      <div className="container mx-auto p-6 max-w-4xl">
+      <div className="max-w-4xl mx-auto animate-fade-in">
         {/* Header Fixo */}
         <div className="sticky top-0 z-10 bg-background pb-4 mb-6 border-b">
           <div className="flex items-center justify-between">
@@ -552,7 +555,7 @@ export default function ExamPage() {
 
         {/* Botão Enviar Fixo */}
         <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-4 shadow-lg">
-          <div className="container mx-auto max-w-4xl">
+          <div className="max-w-4xl mx-auto">
             <Button
               onClick={() => handleSubmit()}
               disabled={isSubmitting || answeredCount < questions.length}
@@ -589,7 +592,7 @@ export default function ExamPage() {
 // Skeleton de Loading
 function ExamPageSkeleton() {
   return (
-    <div className="container mx-auto p-6 max-w-2xl">
+    <div className="max-w-2xl mx-auto space-y-4">
       <Skeleton className="h-10 w-32 mb-6" />
       <Card>
         <CardHeader>

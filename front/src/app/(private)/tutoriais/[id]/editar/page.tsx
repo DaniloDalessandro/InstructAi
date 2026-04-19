@@ -258,24 +258,50 @@ export default function EditarTutorialPage() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-6 flex items-center justify-center min-h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="space-y-5">
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-20 bg-muted animate-pulse rounded" />
+          <div className="h-5 w-px bg-border" />
+          <div className="h-5 w-40 bg-muted animate-pulse rounded" />
+        </div>
+        <div className="h-8 w-64 bg-muted animate-pulse rounded" />
+        <div className="border rounded-xl p-6 space-y-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-10 bg-muted animate-pulse rounded" />
+          ))}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-7xl">
-      <div className="mb-6">
-        <Button variant="ghost" onClick={() => router.push(`/tutoriais/${id}`)}>
-          <ChevronLeft className="mr-2 h-4 w-4" />
-          Voltar
-        </Button>
+    <div className="space-y-5 animate-fade-in">
+      {/* Header breadcrumb */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <button
+            type="button"
+            onClick={() => router.push(`/tutoriais/${id}`)}
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-1"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+            Tutoriais
+          </button>
+          <h1 className="text-2xl font-bold tracking-tight">Editar Tutorial</h1>
+        </div>
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => router.push(`/tutoriais/${id}`)}>
+            Cancelar
+          </Button>
+          <Button type="submit" form="edit-tutorial-form" size="sm" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Salvando...</>
+            ) : 'Salvar Alterações'}
+          </Button>
+        </div>
       </div>
 
-      <h1 className="text-3xl font-bold mb-6">Editar Tutorial</h1>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form id="edit-tutorial-form" onSubmit={handleSubmit} className="space-y-5">
         {/* Informações Básicas */}
         <Card>
           <CardHeader>
@@ -600,22 +626,6 @@ export default function EditarTutorialPage() {
           </CardContent>
         </Card>
 
-        {/* Ações */}
-        <div className="flex gap-2 justify-end">
-          <Button type="button" variant="outline" onClick={() => router.push(`/tutoriais/${id}`)}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Salvando...
-              </>
-            ) : (
-              'Salvar Alterações'
-            )}
-          </Button>
-        </div>
       </form>
 
       <ImageAnnotationEditor
