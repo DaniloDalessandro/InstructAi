@@ -16,9 +16,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronLeft, Plus, Trash2, GripVertical, ArrowDown, Image as ImageIcon, Video, Upload, X, Edit3, Loader2 } from 'lucide-react';
+import { ChevronLeft, Plus, Trash2, Image as ImageIcon, Video, Upload, X, Edit3, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import ImageAnnotationEditor from '@/components/forms/ImageAnnotationEditor';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -39,11 +38,9 @@ export default function NovoTutorialPage() {
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
 
-  // Image editor state
   const [editingImageIndex, setEditingImageIndex] = useState<number | null>(null);
   const [editingImageUrl, setEditingImageUrl] = useState<string>('');
 
-  // Form data
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -79,7 +76,6 @@ export default function NovoTutorialPage() {
 
   const handleRemoveStep = (index: number) => {
     const newSteps = steps.filter((_, i) => i !== index);
-    // Reorder remaining steps
     newSteps.forEach((step, i) => {
       step.order = i;
     });
@@ -119,19 +115,16 @@ export default function NovoTutorialPage() {
   const openImageEditor = (index: number) => {
     const step = steps[index];
     if (!step.imagePreview) return;
-
     setEditingImageIndex(index);
     setEditingImageUrl(step.imagePreview);
   };
 
   const handleSaveAnnotatedImage = (blob: Blob) => {
     if (editingImageIndex === null) return;
-
     const newSteps = [...steps];
     newSteps[editingImageIndex].imagePreview = URL.createObjectURL(blob);
     newSteps[editingImageIndex].image = new File([blob], 'annotated-image.jpg', { type: 'image/jpeg' });
     setSteps(newSteps);
-
     setEditingImageIndex(null);
     setEditingImageUrl('');
   };
@@ -156,10 +149,8 @@ export default function NovoTutorialPage() {
     try {
       setIsSubmitting(true);
 
-      // Create tutorial
       const tutorial = await createTutorial(formData);
 
-      // Create steps
       for (const step of steps) {
         if (step.title && step.content) {
           await createTutorialStep({
@@ -190,338 +181,368 @@ export default function NovoTutorialPage() {
   };
 
   return (
-    <div className="space-y-5 animate-fade-in">
+    <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-300">
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <button
-            type="button"
-            onClick={() => router.push('/tutoriais')}
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-1"
-          >
-            <ChevronLeft className="h-3.5 w-3.5" />
-            Tutoriais
-          </button>
-          <h1 className="text-2xl font-bold tracking-tight">Novo Tutorial</h1>
-        </div>
+      <div>
+        <button
+          type="button"
+          onClick={() => router.push('/tutoriais')}
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-1.5"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+          Tutoriais
+        </button>
+        <h1 className="text-2xl font-bold tracking-tight">Novo Tutorial</h1>
       </div>
 
-      <form id="novo-tutorial-form" onSubmit={handleSubmit} className="space-y-5">
-        {/* Informações Básicas */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Informações Básicas</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="title">
-                Título do Tutorial *
-              </Label>
-              <Input
-                id="title"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder="Ex: Como configurar o sistema"
-                className="h-11"
-              />
+      <form id="novo-tutorial-form" onSubmit={handleSubmit} className="space-y-6">
+        {/* Seção 01 — Informações do Tutorial */}
+        <div className="rounded-2xl border bg-card p-6 space-y-5">
+          {/* Section header */}
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-primary/10 text-primary text-sm font-bold grid place-items-center shrink-0">
+              01
+            </div>
+            <div>
+              <h2 className="text-base font-semibold tracking-tight">Informações do Tutorial</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">Dados principais que identificam o tutorial</p>
+            </div>
+          </div>
+
+          <div className="h-px bg-border" />
+
+          {/* Título */}
+          <div className="space-y-1.5">
+            <Label htmlFor="title">Título do Tutorial <span className="text-destructive">*</span></Label>
+            <Input
+              id="title"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              placeholder="Ex: Como configurar o sistema"
+              className="h-11"
+            />
+          </div>
+
+          {/* Descrição */}
+          <div className="space-y-1.5">
+            <Label htmlFor="description">Descrição <span className="text-destructive">*</span></Label>
+            <Textarea
+              id="description"
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Descreva o que será ensinado neste tutorial"
+              rows={3}
+              className="resize-none"
+            />
+          </div>
+
+          {/* Setor + Tags em grid 2 colunas */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="space-y-1.5">
+              <Label htmlFor="sector">Setor <span className="text-destructive">*</span></Label>
+              <Select
+                value={formData.sector}
+                onValueChange={(value) => setFormData({ ...formData, sector: value })}
+              >
+                <SelectTrigger className="h-11">
+                  <SelectValue placeholder="Selecione o setor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sectors.map((sector) => (
+                    <SelectItem key={sector.id} value={sector.id.toString()}>
+                      {sector.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="description">
-                Descrição *
-              </Label>
-              <Textarea
-                id="description"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Descreva o que será ensinado neste tutorial"
-                rows={4}
-                className="resize-none"
-              />
-            </div>
+            <div className="space-y-1.5">
+              <Label>Tags <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+              <Select
+                value=""
+                onValueChange={(value) => {
+                  if (!formData.tags.includes(value)) {
+                    setFormData({ ...formData, tags: [...formData.tags, value] });
+                  }
+                }}
+              >
+                <SelectTrigger className="h-11">
+                  <SelectValue placeholder="Adicionar tags" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tags.map((tag) => (
+                    <SelectItem key={tag.id} value={tag.id.toString()}>
+                      {tag.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="sector">
-                  Setor *
-                </Label>
-                <Select value={formData.sector} onValueChange={(value) => setFormData({ ...formData, sector: value })}>
-                  <SelectTrigger className="h-11">
-                    <SelectValue placeholder="Selecione o setor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sectors.map((sector) => (
-                      <SelectItem key={sector.id} value={sector.id.toString()}>
-                        {sector.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Tags (opcional)</Label>
-                <Select
-                  value=""
-                  onValueChange={(value) => {
-                    if (!formData.tags.includes(value)) {
-                      setFormData({ ...formData, tags: [...formData.tags, value] });
-                    }
-                  }}
-                >
-                  <SelectTrigger className="h-11">
-                    <SelectValue placeholder="Adicionar tags" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {tags.map((tag) => (
-                      <SelectItem key={tag.id} value={tag.id.toString()}>
+              {formData.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {formData.tags.map((tagId) => {
+                    const tag = tags.find((t) => t.id.toString() === tagId);
+                    return tag ? (
+                      <span
+                        key={tag.id}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium text-white"
+                        style={{ backgroundColor: tag.color }}
+                      >
                         {tag.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {formData.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {formData.tags.map((tagId) => {
-                      const tag = tags.find((t) => t.id.toString() === tagId);
-                      return tag ? (
-                        <span
-                          key={tag.id}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium text-white"
-                          style={{ backgroundColor: tag.color }}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFormData({ ...formData, tags: formData.tags.filter((t) => t !== tagId) })
+                          }
+                          className="hover:opacity-70 ml-0.5 leading-none"
                         >
-                          {tag.name}
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setFormData({ ...formData, tags: formData.tags.filter((t) => t !== tagId) })
-                            }
-                            className="hover:opacity-70 ml-1"
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ) : null;
-                    })}
-                  </div>
-                )}
+                          ×
+                        </button>
+                      </span>
+                    ) : null;
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Seção 02 — Passos do Tutorial */}
+        <div className="space-y-4">
+          {/* Section header */}
+          <div className="rounded-2xl border bg-card p-6 pb-5">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-primary/10 text-primary text-sm font-bold grid place-items-center shrink-0">
+                02
+              </div>
+              <div>
+                <h2 className="text-base font-semibold tracking-tight">Passos do Tutorial</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Crie um guia passo a passo com texto, imagens e vídeos</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Passos do Tutorial */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Passos do Tutorial</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">
-              Crie um guia passo a passo completo com texto, imagens e vídeos
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-6">
+          {/* Timeline de passos */}
+          <div className="flex flex-col items-stretch">
             {steps.map((step, index) => (
               <div key={index}>
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex items-start gap-4">
-                      <div className="flex-shrink-0 pt-2">
-                        <GripVertical className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                      <div className="flex-1 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium">Passo {index + 1}</span>
-                          {steps.length > 1 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRemoveStep(index)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor={`title-${index}`}>
-                            Título do Passo
-                          </Label>
-                          <Input
-                            id={`title-${index}`}
-                            value={step.title}
-                            onChange={(e) => handleStepChange(index, 'title', e.target.value)}
-                            placeholder="Ex: Acessar o painel de controle"
-                            className="h-11"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor={`content-${index}`}>
-                            Descrição do Passo
-                          </Label>
-                          <Textarea
-                            id={`content-${index}`}
-                            value={step.content}
-                            onChange={(e) => handleStepChange(index, 'content', e.target.value)}
-                            placeholder="Descreva em detalhes o que deve ser feito neste passo..."
-                            rows={5}
-                            className="resize-none"
-                          />
-                        </div>
-
-                        {/* Recursos Multimídia */}
-                        <div className="border-t pt-4">
-                          <h4 className="text-sm font-medium mb-3 text-muted-foreground">
-                            Recursos Multimídia (Opcional)
-                          </h4>
-
-                          <Tabs defaultValue="none" className="w-full">
-                            <TabsList className="grid w-full grid-cols-3 h-11">
-                              <TabsTrigger value="none" className="gap-2">
-                                <X className="h-4 w-4" />
-                                Nenhum
-                              </TabsTrigger>
-                              <TabsTrigger value="image" className="gap-2">
-                                <ImageIcon className="h-4 w-4" />
-                                Imagem
-                              </TabsTrigger>
-                              <TabsTrigger value="video" className="gap-2">
-                                <Video className="h-4 w-4" />
-                                Vídeo
-                              </TabsTrigger>
-                            </TabsList>
-
-                            <TabsContent value="none" className="mt-4">
-                              <div className="text-center py-8 text-sm text-muted-foreground">
-                                Nenhum recurso multimídia adicionado a este passo
-                              </div>
-                            </TabsContent>
-
-                            <TabsContent value="image" className="mt-4 space-y-3">
-                              {step.imagePreview ? (
-                                <div className="relative border rounded-lg overflow-hidden bg-muted/30">
-                                  <img
-                                    src={step.imagePreview}
-                                    alt="Preview"
-                                    className="w-full max-h-64 object-contain"
-                                  />
-                                  <div className="absolute top-3 right-3 flex gap-2">
-                                    <Button
-                                      type="button"
-                                      variant="secondary"
-                                      size="sm"
-                                      className="bg-background/90 hover:bg-background shadow-lg"
-                                      onClick={() => openImageEditor(index)}
-                                    >
-                                      <Edit3 className="h-4 w-4 mr-2" />
-                                      Anotar Imagem
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="destructive"
-                                      size="sm"
-                                      onClick={() => handleRemoveImage(index)}
-                                    >
-                                      <X className="h-4 w-4 mr-2" />
-                                      Remover
-                                    </Button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="relative">
-                                  <input
-                                    id={`image-${index}`}
-                                    type="file"
-                                    accept="image/*"
-                                    className="hidden"
-                                    onChange={(e) => {
-                                      const file = e.target.files?.[0] || null;
-                                      handleImageUpload(index, file);
-                                    }}
-                                  />
-                                  <label
-                                    htmlFor={`image-${index}`}
-                                    className="flex flex-col items-center justify-center h-48 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50 hover:border-primary/50 transition-all"
-                                  >
-                                    <Upload className="h-8 w-8 text-muted-foreground mb-3" />
-                                    <span className="text-base font-medium text-foreground mb-1">Clique para adicionar imagem</span>
-                                    <span className="text-sm text-muted-foreground">PNG, JPG, GIF até 5MB</span>
-                                  </label>
-                                </div>
-                              )}
-                            </TabsContent>
-
-                            <TabsContent value="video" className="mt-4 space-y-3">
-                              <div className="space-y-2">
-                                <Label htmlFor={`youtube-${index}`}>
-                                  URL do YouTube
-                                </Label>
-                                <Input
-                                  id={`youtube-${index}`}
-                                  value={step.youtube_url || ''}
-                                  onChange={(e) => handleStepChange(index, 'youtube_url', e.target.value)}
-                                  placeholder="https://www.youtube.com/watch?v=..."
-                                  className="h-11"
-                                />
-                              </div>
-                              {step.youtube_url && (
-                                <div className="border rounded-lg overflow-hidden bg-muted/30">
-                                  <div className="aspect-video flex items-center justify-center">
-                                    <div className="text-center">
-                                      <Video className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
-                                      <p className="text-sm text-muted-foreground font-medium">Vídeo do YouTube</p>
-                                      <p className="text-xs text-muted-foreground mt-1">Será exibido aqui na visualização</p>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                            </TabsContent>
-                          </Tabs>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Seta indicando próximo passo */}
-                {index < steps.length - 1 && (
-                  <div className="flex justify-center py-4">
-                    <ArrowDown className="h-6 w-6 text-muted-foreground animate-bounce" />
+                {/* Conector entre passos */}
+                {index > 0 && (
+                  <div className="flex flex-col items-center py-0.5 ml-[11px]">
+                    <div className="w-px h-5 bg-border" />
+                    <div className="w-2 h-2 rounded-full bg-primary/30" />
+                    <div className="w-px h-5 bg-border" />
                   </div>
                 )}
+
+                {/* Card do passo */}
+                <div
+                  className="rounded-2xl border bg-card hover:border-primary/40 transition-all animate-in slide-in-from-bottom-4 fade-in duration-300"
+                  style={{ animationDelay: `${index * 60}ms` }}
+                >
+                  {/* Header do passo */}
+                  <div className="flex items-center gap-3 px-5 py-4 border-b">
+                    <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold grid place-items-center shrink-0">
+                      {index + 1}
+                    </div>
+                    <span className="flex-1 text-sm font-semibold">Passo {index + 1}</span>
+                    {steps.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemoveStep(index)}
+                        className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Conteúdo do passo */}
+                  <div className="p-5 space-y-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor={`step-title-${index}`}>Título do Passo</Label>
+                      <Input
+                        id={`step-title-${index}`}
+                        value={step.title}
+                        onChange={(e) => handleStepChange(index, 'title', e.target.value)}
+                        placeholder="Ex: Acessar o painel de controle"
+                        className="h-11"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor={`step-content-${index}`}>Descrição do Passo</Label>
+                      <Textarea
+                        id={`step-content-${index}`}
+                        value={step.content}
+                        onChange={(e) => handleStepChange(index, 'content', e.target.value)}
+                        placeholder="Descreva em detalhes o que deve ser feito neste passo..."
+                        rows={4}
+                        className="resize-none"
+                      />
+                    </div>
+
+                    {/* Recursos Multimídia */}
+                    <div className="space-y-2.5">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Recurso Multimídia
+                      </p>
+
+                      <Tabs defaultValue="none" className="w-full">
+                        <TabsList className="h-9 w-full grid grid-cols-3">
+                          <TabsTrigger value="none" className="gap-1.5 text-xs">
+                            <X className="h-3.5 w-3.5" />
+                            Nenhum
+                          </TabsTrigger>
+                          <TabsTrigger value="image" className="gap-1.5 text-xs">
+                            <ImageIcon className="h-3.5 w-3.5" />
+                            Imagem
+                          </TabsTrigger>
+                          <TabsTrigger value="video" className="gap-1.5 text-xs">
+                            <Video className="h-3.5 w-3.5" />
+                            Vídeo
+                          </TabsTrigger>
+                        </TabsList>
+
+                        <TabsContent value="none" className="mt-3">
+                          <div className="flex items-center justify-center h-20 rounded-xl bg-muted/30 border border-dashed">
+                            <p className="text-xs text-muted-foreground">Nenhum recurso adicionado a este passo</p>
+                          </div>
+                        </TabsContent>
+
+                        <TabsContent value="image" className="mt-3 space-y-3">
+                          {step.imagePreview ? (
+                            <div className="relative rounded-xl border overflow-hidden bg-muted/30">
+                              <img
+                                src={step.imagePreview}
+                                alt="Preview"
+                                className="w-full max-h-64 object-contain"
+                              />
+                              <div className="absolute top-3 right-3 flex gap-2">
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="sm"
+                                  className="bg-background/90 hover:bg-background shadow-md text-xs h-8"
+                                  onClick={() => openImageEditor(index)}
+                                >
+                                  <Edit3 className="h-3.5 w-3.5 mr-1.5" />
+                                  Anotar
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  className="text-xs h-8"
+                                  onClick={() => handleRemoveImage(index)}
+                                >
+                                  <X className="h-3.5 w-3.5 mr-1.5" />
+                                  Remover
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="relative">
+                              <input
+                                id={`image-${index}`}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0] || null;
+                                  handleImageUpload(index, file);
+                                }}
+                              />
+                              <label
+                                htmlFor={`image-${index}`}
+                                className="flex flex-col items-center justify-center h-40 rounded-xl border-2 border-dashed border-muted-foreground/25 cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all group"
+                              >
+                                <div className="w-10 h-10 rounded-xl bg-muted grid place-items-center mb-2 group-hover:bg-primary/10 transition-colors">
+                                  <Upload className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                                </div>
+                                <span className="text-sm font-medium text-foreground">Clique para enviar imagem</span>
+                                <span className="text-xs text-muted-foreground mt-0.5">PNG, JPG, GIF — até 5 MB</span>
+                              </label>
+                            </div>
+                          )}
+                        </TabsContent>
+
+                        <TabsContent value="video" className="mt-3 space-y-3">
+                          <div className="space-y-1.5">
+                            <Label htmlFor={`youtube-${index}`}>URL do YouTube</Label>
+                            <Input
+                              id={`youtube-${index}`}
+                              value={step.youtube_url || ''}
+                              onChange={(e) => handleStepChange(index, 'youtube_url', e.target.value)}
+                              placeholder="https://www.youtube.com/watch?v=..."
+                              className="h-11"
+                            />
+                          </div>
+                          {step.youtube_url && (
+                            <div className="rounded-xl border overflow-hidden bg-muted/30">
+                              <div className="flex items-center justify-center gap-3 py-6">
+                                <div className="w-10 h-10 rounded-xl bg-red-500/10 text-red-500 grid place-items-center">
+                                  <Video className="h-5 w-5" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium">Vídeo do YouTube vinculado</p>
+                                  <p className="text-xs text-muted-foreground mt-0.5">Será exibido na visualização do tutorial</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </TabsContent>
+                      </Tabs>
+                    </div>
+                  </div>
+                </div>
               </div>
             ))}
 
-            {/* Botão Adicionar Passo */}
-            <div className="pt-4">
-              <Button
-                type="button"
-                onClick={handleAddStep}
-                variant="outline"
-                className="w-full border-dashed border-2 h-10 hover:bg-primary/5 hover:border-primary"
-              >
-                <Plus className="mr-2 h-5 w-5" />
-                Adicionar Novo Passo
-              </Button>
+            {/* Conector antes do botão */}
+            <div className="flex flex-col items-center py-0.5 ml-[11px]">
+              <div className="w-px h-5 bg-border" />
+              <div className="w-2 h-2 rounded-full bg-primary/30" />
+              <div className="w-px h-5 bg-border" />
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Ações */}
-        <div className="flex gap-2 justify-end pb-4">
+            {/* Botão Adicionar Passo */}
+            <button
+              type="button"
+              onClick={handleAddStep}
+              className="w-full rounded-2xl border-2 border-dashed border-primary/30 hover:border-primary hover:bg-primary/5 py-4 flex items-center justify-center gap-2 text-sm font-medium text-muted-foreground hover:text-primary transition-all hover:scale-[1.01]"
+            >
+              <div className="w-6 h-6 rounded-full bg-primary/10 grid place-items-center">
+                <Plus className="h-3.5 w-3.5 text-primary" />
+              </div>
+              Adicionar Passo
+            </button>
+          </div>
+        </div>
+
+        {/* Ações — rodapé do form */}
+        <div className="flex gap-2 justify-end pt-2 pb-4">
           <Button type="button" variant="outline" size="sm" onClick={() => router.push('/tutoriais')}>
             Cancelar
           </Button>
-          <Button type="submit" size="sm" disabled={isSubmitting}>
+          <Button
+            type="submit"
+            size="sm"
+            disabled={isSubmitting}
+            className="bg-gradient-to-r from-primary to-purple-500 hover:opacity-90 transition-opacity text-white border-0"
+          >
             {isSubmitting ? (
-              <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Criando...</>
-            ) : 'Criar Tutorial'}
+              <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Salvando...</>
+            ) : (
+              'Salvar Tutorial'
+            )}
           </Button>
         </div>
-
       </form>
 
-      {/* Image Editor */}
       <ImageAnnotationEditor
         isOpen={editingImageIndex !== null}
         imageUrl={editingImageUrl}
