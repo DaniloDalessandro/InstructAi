@@ -41,7 +41,11 @@ export default function ManualForm({ open, handleClose, initialData, onSubmit }:
 
   useEffect(() => {
     if (initialData && open) {
-      setFormData({ name: initialData.name || '', sectors: initialData.sectors || [], tags: initialData.tags || [] });
+      setFormData({
+        name: initialData.name || '',
+        sectors: (initialData.sectors || []).map(String),
+        tags: (initialData.tags || []).map(String),
+      });
       setSelectedFile(null);
     } else if (!open) {
       setFormData({ name: '', sectors: [], tags: [] });
@@ -112,7 +116,7 @@ export default function ManualForm({ open, handleClose, initialData, onSubmit }:
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[620px] max-w-[95vw] max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="sm:max-w-[620px] max-w-[95vw] p-0">
         <form onSubmit={handleSubmit}>
           {/* Header */}
           <div className="px-6 pt-6 pb-4 border-b">

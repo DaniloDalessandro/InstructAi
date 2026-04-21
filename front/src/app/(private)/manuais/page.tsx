@@ -13,7 +13,7 @@ import {
   Plus, Grid3x3, List, Search,
   FileText, Clock, Pencil, Trash2,
   Eye, CheckCircle2, XCircle, SortAsc, ArrowUpRight,
-  ExternalLink,
+  ExternalLink, BookOpen,
 } from "lucide-react"
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -293,16 +293,15 @@ function ManualGalleryCard({
       <button
         onClick={onView}
         className={cn(
-          "relative w-full flex flex-col items-center justify-center px-5 py-6 overflow-hidden shrink-0 gap-2",
+          "relative w-full flex items-center justify-center px-5 py-6 overflow-hidden shrink-0 text-left",
           gradientClass
         )}
         tabIndex={-1}
         aria-hidden
       >
-        <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm grid place-items-center">
-          <FileText className="w-5 h-5 text-white" />
-        </div>
-        <span className="text-xs font-semibold text-white/80 uppercase tracking-widest">PDF</span>
+        <span className="relative z-10 text-sm font-semibold text-white leading-snug line-clamp-3">
+          {m.name}
+        </span>
       </button>
 
       {/* Body */}

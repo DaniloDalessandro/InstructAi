@@ -39,30 +39,29 @@ export function ManualFilters({ filters, onFiltersChange }: ManualFiltersProps) 
 
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-      {/* Search */}
-      <div className="relative flex-1 min-w-0">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-        <Input
-          type="text"
-          placeholder="Buscar manual..."
-          value={filters.search}
-          onChange={(e) => onFiltersChange({ ...filters, search: e.target.value })}
-          className="pl-8 h-8 text-sm bg-background/60"
-        />
-      </div>
+      {/* 3 campos em grid com espaço igual */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 flex-1">
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <Input
+            type="text"
+            placeholder="Buscar manual..."
+            value={filters.search}
+            onChange={(e) => onFiltersChange({ ...filters, search: e.target.value })}
+            className="pl-8 h-9 text-sm bg-background/60 w-full"
+          />
+        </div>
 
-      {/* Setores */}
-      <div className="w-full sm:w-44">
+        {/* Setores */}
         <SectorMultiSelect
           sectors={sectors}
           selectedSectorIds={filters.sectors}
           onSelectionChange={(ids) => onFiltersChange({ ...filters, sectors: ids })}
           placeholder="Setores..."
         />
-      </div>
 
-      {/* Tags */}
-      <div className="w-full sm:w-44">
+        {/* Tags */}
         <TagMultiSelect
           tags={tags}
           selectedTagIds={filters.tags}
