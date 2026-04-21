@@ -749,9 +749,9 @@ export default function CourseStepperForm({
       </div>
 
       {/* Linha com 4 campos: Setor, Carga Horária, Nota Mínima, Duração da Prova */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Setor */}
-        <div className="grid gap-2">
+        <div className="grid gap-2 lg:col-span-2">
           <Label htmlFor="sector">Setor *</Label>
           <Select
             value={formData.sector}
@@ -867,11 +867,11 @@ export default function CourseStepperForm({
       : null;
 
     return (
-      <div className="h-full py-6 overflow-hidden">
+      <div className="flex-1 min-h-0 py-4 overflow-hidden flex flex-col">
         {/* Layout de 2 Colunas */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 h-full">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 flex-1 min-h-0 overflow-hidden">
           {/* COLUNA ESQUERDA (40%) - Formulário + Preview */}
-          <div className="lg:col-span-2 flex flex-col h-full overflow-hidden">
+          <div className="lg:col-span-2 flex flex-col min-h-0 overflow-hidden">
             {/* Header */}
             <div className="flex-shrink-0 mb-4">
               <h3 className="text-lg font-medium">
@@ -975,7 +975,7 @@ export default function CourseStepperForm({
           </div>
 
           {/* COLUNA DIREITA (60%) - Lista de Aulas */}
-          <div className="lg:col-span-3 flex flex-col h-full overflow-hidden">
+          <div className="lg:col-span-3 flex flex-col min-h-0 overflow-hidden">
             {/* Header da Lista - Fixo */}
             <div className="flex items-center justify-between mb-4 flex-shrink-0">
               <div>
@@ -989,7 +989,7 @@ export default function CourseStepperForm({
             </div>
 
             {/* Lista de Aulas - Scrollável */}
-            <div className="flex-1 overflow-y-auto pr-2">
+            <div className="flex-1 min-h-0 overflow-y-auto pr-2">
               {lessons.length === 0 ? (
               <div className="text-center py-16 border-2 border-dashed rounded-lg bg-muted/30">
                 <div className="flex flex-col items-center gap-3">
@@ -1412,7 +1412,7 @@ export default function CourseStepperForm({
           <>
             {renderStepIndicator()}
 
-            <div className="flex-1 overflow-y-auto">
+            <div className={`flex-1 min-h-0 ${currentStep === 2 ? 'overflow-hidden flex flex-col' : 'overflow-y-auto'}`}>
               {currentStep === 1 && renderStep1()}
               {currentStep === 2 && renderStep2()}
               {currentStep === 3 && renderStep3()}

@@ -40,6 +40,7 @@ services:
     volumes:
       - ./front:/app
       - /app/node_modules
+      - /app/.next
     ports:
       - "3001:3000"
     depends_on:

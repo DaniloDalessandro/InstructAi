@@ -116,12 +116,19 @@ export interface ExamSubmission {
   answers: Record<string, 'A' | 'B' | 'C' | 'D'>; // question_id: selected_option
 }
 
+export interface QuestionResult {
+  correct: boolean;
+  your_answer: string;
+  correct_answer: string;
+}
+
 export interface ExamResult {
   score: number;
   passed: boolean;
   correct_count: number;
   total_questions: number;
   passing_score: number;
+  question_results: Record<string, QuestionResult>;
 }
 
 export interface Certificate {
