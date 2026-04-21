@@ -264,7 +264,7 @@ export default function AjudaPage() {
   )
 
   return (
-    <div className="space-y-5 max-w-7xl animate-fade-in">
+    <div className="space-y-5 animate-fade-in">
 
       {/* Cabeçalho padronizado */}
       <div>
@@ -339,7 +339,7 @@ export default function AjudaPage() {
         </CardContent>
       </Card>
 
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="grid lg:grid-cols-3 gap-5">
 
         {/* Guias por módulo */}
         <div className="lg:col-span-2 space-y-3">

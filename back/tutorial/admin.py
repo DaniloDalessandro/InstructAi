@@ -25,7 +25,7 @@ class TutorialAdmin(admin.ModelAdmin):
     list_filter = ['sector', 'tags', 'is_active', 'created_at']
     search_fields = ['title', 'description']
     filter_horizontal = ['tags']
-    readonly_fields = ['created_by', 'created_at', 'updated_at', 'step_count']
+    readonly_fields = ['created_by', 'created_at', 'updated_at']
     inlines = [TutorialStepInline]
 
     fieldsets = (
@@ -40,6 +40,10 @@ class TutorialAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+    def step_count(self, obj):
+        return obj.steps.count()
+    step_count.short_description = 'Passos'
 
     def save_model(self, request, obj, form, change):
         """Set created_by on creation"""

@@ -956,6 +956,7 @@ export default function ImageAnnotationEditor({
   const selectedAnnotation = selectedAnnotationId ? annotations.find(a => a.id === selectedAnnotationId) : null;
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="!max-w-none w-[98vw] sm:!max-w-[98vw] md:!max-w-[98vw] lg:!max-w-[98vw] h-[97vh] flex flex-col p-3 gap-2">
         <DialogHeader className="flex-shrink-0 pb-1">
@@ -1315,5 +1316,6 @@ export default function ImageAnnotationEditor({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </>
   );
 }

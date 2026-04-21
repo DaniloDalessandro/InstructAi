@@ -18,7 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronLeft, Plus, Trash2, GripVertical, ArrowDown, Image as ImageIcon, Video, Upload, X, Edit3 } from 'lucide-react';
+import { ChevronLeft, Plus, Trash2, GripVertical, ArrowDown, Image as ImageIcon, Video, Upload, X, Edit3, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import ImageAnnotationEditor from '@/components/forms/ImageAnnotationEditor';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -190,18 +190,23 @@ export default function NovoTutorialPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-5 animate-fade-in">
-      {/* Cabeçalho com navegação */}
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" className="h-8" onClick={() => router.push('/tutoriais')}>
-          <ChevronLeft className="mr-1 h-4 w-4" />
-          Tutoriais
-        </Button>
-        <span className="text-muted-foreground/40">/</span>
-        <h1 className="text-xl font-bold tracking-tight">Novo Tutorial</h1>
+    <div className="space-y-5 animate-fade-in">
+      {/* Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <button
+            type="button"
+            onClick={() => router.push('/tutoriais')}
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-1"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+            Tutoriais
+          </button>
+          <h1 className="text-2xl font-bold tracking-tight">Novo Tutorial</h1>
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form id="novo-tutorial-form" onSubmit={handleSubmit} className="space-y-5">
         {/* Informações Básicas */}
         <Card>
           <CardHeader>
@@ -209,7 +214,7 @@ export default function NovoTutorialPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="title" className="text-sm font-medium">
+              <Label htmlFor="title">
                 Título do Tutorial *
               </Label>
               <Input
@@ -222,7 +227,7 @@ export default function NovoTutorialPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="description" className="text-sm font-medium">
+              <Label htmlFor="description">
                 Descrição *
               </Label>
               <Textarea
@@ -237,11 +242,11 @@ export default function NovoTutorialPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="sector" className="text-sm font-medium">
+                <Label htmlFor="sector">
                   Setor *
                 </Label>
                 <Select value={formData.sector} onValueChange={(value) => setFormData({ ...formData, sector: value })}>
-                  <SelectTrigger className="h-12 text-base">
+                  <SelectTrigger className="h-11">
                     <SelectValue placeholder="Selecione o setor" />
                   </SelectTrigger>
                   <SelectContent>
@@ -255,7 +260,7 @@ export default function NovoTutorialPage() {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Tags (opcional)</Label>
+                <Label>Tags (opcional)</Label>
                 <Select
                   value=""
                   onValueChange={(value) => {
@@ -264,7 +269,7 @@ export default function NovoTutorialPage() {
                     }
                   }}
                 >
-                  <SelectTrigger className="h-12 text-base">
+                  <SelectTrigger className="h-11">
                     <SelectValue placeholder="Adicionar tags" />
                   </SelectTrigger>
                   <SelectContent>
@@ -282,7 +287,7 @@ export default function NovoTutorialPage() {
                       return tag ? (
                         <span
                           key={tag.id}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium text-white shadow-sm"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium text-white"
                           style={{ backgroundColor: tag.color }}
                         >
                           {tag.name}
@@ -338,7 +343,7 @@ export default function NovoTutorialPage() {
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor={`title-${index}`} className="text-sm font-medium">
+                          <Label htmlFor={`title-${index}`}>
                             Título do Passo
                           </Label>
                           <Input
@@ -351,7 +356,7 @@ export default function NovoTutorialPage() {
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor={`content-${index}`} className="text-sm font-medium">
+                          <Label htmlFor={`content-${index}`}>
                             Descrição do Passo
                           </Label>
                           <Textarea
@@ -448,7 +453,7 @@ export default function NovoTutorialPage() {
 
                             <TabsContent value="video" className="mt-4 space-y-3">
                               <div className="space-y-2">
-                                <Label htmlFor={`youtube-${index}`} className="text-sm font-medium">
+                                <Label htmlFor={`youtube-${index}`}>
                                   URL do YouTube
                                 </Label>
                                 <Input
@@ -493,7 +498,7 @@ export default function NovoTutorialPage() {
                 type="button"
                 onClick={handleAddStep}
                 variant="outline"
-                className="w-full border-dashed border-2 h-12 hover:bg-primary/5 hover:border-primary"
+                className="w-full border-dashed border-2 h-10 hover:bg-primary/5 hover:border-primary"
               >
                 <Plus className="mr-2 h-5 w-5" />
                 Adicionar Novo Passo
@@ -502,22 +507,18 @@ export default function NovoTutorialPage() {
           </CardContent>
         </Card>
 
-        {/* Ações — sticky no fundo em mobile para facilitar acesso */}
+        {/* Ações */}
         <div className="flex gap-2 justify-end pb-4">
           <Button type="button" variant="outline" size="sm" onClick={() => router.push('/tutoriais')}>
             Cancelar
           </Button>
-          <Button type="submit" size="sm" disabled={isSubmitting} className="min-w-[120px]">
+          <Button type="submit" size="sm" disabled={isSubmitting}>
             {isSubmitting ? (
-              <>
-                <GripVertical className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                Criando...
-              </>
-            ) : (
-              'Criar Tutorial'
-            )}
+              <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Criando...</>
+            ) : 'Criar Tutorial'}
           </Button>
         </div>
+
       </form>
 
       {/* Image Editor */}

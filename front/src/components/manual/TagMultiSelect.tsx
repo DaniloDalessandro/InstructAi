@@ -77,24 +77,30 @@ export function TagMultiSelect({
                   className="gap-1"
                 >
                   {tag.name}
-                  <button
+                  <span
+                    role="button"
+                    tabIndex={0}
                     onClick={(e) => removeTag(tag.id, e)}
-                    className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    onKeyDown={(e) => e.key === 'Enter' && removeTag(tag.id, e as any)}
+                    className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
                   >
                     <X className="h-3 w-3" />
-                  </button>
+                  </span>
                 </Badge>
               ))
             )}
           </div>
           <div className="flex items-center gap-1 ml-2">
             {selectedTags.length > 0 && (
-              <button
+              <span
+                role="button"
+                tabIndex={0}
                 onClick={clearAll}
-                className="ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                onKeyDown={(e) => e.key === 'Enter' && clearAll(e as any)}
+                className="ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
               >
                 <X className="h-4 w-4 opacity-50 hover:opacity-100" />
-              </button>
+              </span>
             )}
             <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
           </div>

@@ -180,6 +180,14 @@ class LessonViewSet(viewsets.ModelViewSet):
         """Calculate and update course completion percentage"""
         total_lessons = course.lessons.filter(is_active=True).count()
         if total_lessons == 0:
+            # Curso sem aulas: considera 100% se só tem prova
+            progress, _ = CourseProgress.objects.get_or_create(user=user, course=course)
+            progress.completion_percentage = 100
+            if not course.has_final_exam or progress.exam_passed:
+                if not progress.completed_at:
+                    from django.utils import timezone
+                    progress.completed_at = timezone.now()
+            progress.save()
             return
 
         completed_lessons = LessonProgress.objects.filter(

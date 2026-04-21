@@ -77,6 +77,7 @@ export default function TutorialViewPage() {
       const pageHeight = doc.internal.pageSize.getHeight();
       const margin = 18;
       const contentWidth = pageWidth - margin * 2;
+      const bottomBoundary = pageHeight - margin - 10; // 10mm para o rodapé
       let y = margin;
 
       const stripHtml = (html: string) => {
@@ -85,71 +86,141 @@ export default function TutorialViewPage() {
         return (div.textContent || div.innerText || '').trim();
       };
 
-      const lineH = (fontSize: number) => fontSize * 0.42;
+      // Usa o lineHeight real do jsPDF para o fontSize atual
+      const getRealLineH = () => doc.getLineHeight() / doc.internal.scaleFactor;
 
       const checkBreak = (neededMm: number) => {
-        if (y + neededMm > pageHeight - margin) { doc.addPage(); y = margin; }
+        if (y + neededMm > bottomBoundary) { doc.addPage(); y = margin; }
       };
 
-      const addText = (text: string, fontSize: number, bold = false, color: [number, number, number] = [30, 30, 30]) => {
+      // Renderiza linha por linha para nunca ultrapassar a página
+      const addText = (
+        text: string,
+        fontSize: number,
+        bold = false,
+        color: [number, number, number] = [30, 30, 30],
+        extraSpacingAfter = 2
+      ) => {
+        if (!text.trim()) return;
         doc.setFontSize(fontSize);
         doc.setFont('helvetica', bold ? 'bold' : 'normal');
         doc.setTextColor(...color);
+        const lineH = getRealLineH();
         const lines = doc.splitTextToSize(text, contentWidth) as string[];
-        checkBreak(lines.length * lineH(fontSize) + 4);
-        doc.text(lines, margin, y);
-        y += lines.length * lineH(fontSize) + 2;
+        for (const line of lines) {
+          if (y + lineH > bottomBoundary) { doc.addPage(); y = margin; }
+          doc.text(line, margin, y);
+          y += lineH;
+        }
+        y += extraSpacingAfter;
       };
 
       const addSeparator = (light = false) => {
-        checkBreak(6);
-        doc.setDrawColor(...(light ? ([210, 210, 210] as [number, number, number]) : ([150, 150, 150] as [number, number, number])));
+        checkBreak(8);
+        doc.setDrawColor(...(light ? ([210, 210, 210] as [number, number, number]) : ([180, 180, 180] as [number, number, number])));
         doc.setLineWidth(light ? 0.3 : 0.5);
         doc.line(margin, y, pageWidth - margin, y);
-        y += 5;
+        y += 6;
       };
 
+      // ── Cabeçalho ────────────────────────────────────────────────────────
       doc.setFillColor(37, 99, 235);
-      doc.rect(margin, y - 2, contentWidth, 1, 'F');
-      y += 3;
-      addText(tutorial.title, 20, true, [17, 24, 39]);
-      y += 1;
-      if (tutorial.description) { addText(tutorial.description, 11, false, [75, 85, 99]); y += 1; }
-      const metaItems = [`Setor: ${tutorial.sector_detail.name}`, ...(tutorial.tags_detail.length > 0 ? [`Tags: ${tutorial.tags_detail.map((t) => t.name).join(', ')}`] : []), `Criado por: ${tutorial.created_by_name}`];
-      addText(metaItems.join('   •   '), 9, false, [107, 114, 128]);
-      y += 2;
+      doc.rect(margin, y, contentWidth, 1.2, 'F');
+      y += 6;
+
+      addText(tutorial.title, 20, true, [17, 24, 39], 3);
+      if (tutorial.description) addText(tutorial.description, 11, false, [75, 85, 99], 3);
+
+      const metaItems = [
+        `Setor: ${tutorial.sector_detail.name}`,
+        ...(tutorial.tags_detail.length > 0 ? [`Tags: ${tutorial.tags_detail.map((t) => t.name).join(', ')}`] : []),
+        `Criado por: ${tutorial.created_by_name}`,
+      ];
+      addText(metaItems.join('   •   '), 9, false, [107, 114, 128], 4);
       addSeparator();
 
-      tutorial.steps.forEach((step, index) => {
-        checkBreak(20);
+      // Carrega imagem como dataURL para embed no PDF
+      const loadImage = async (url: string): Promise<{ dataUrl: string; w: number; h: number } | null> => {
+        try {
+          const res = await fetch(url);
+          const blob = await res.blob();
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+          const img = new Image();
+          await new Promise<void>((resolve) => { img.onload = () => resolve(); img.onerror = () => resolve(); img.src = dataUrl; });
+          return { dataUrl, w: img.naturalWidth || 800, h: img.naturalHeight || 600 };
+        } catch {
+          return null;
+        }
+      };
+
+      const addImageToPdf = async (url: string, caption?: string) => {
+        const result = await loadImage(url);
+        if (!result) {
+          addText(caption ? `[Imagem: ${caption}]` : '[Imagem]', 9, false, [107, 114, 128], 3);
+          return;
+        }
+        const { dataUrl, w, h } = result;
+        const maxW = contentWidth;
+        const maxH = 90;
+        const aspect = w / h;
+        let imgW = maxW;
+        let imgH = imgW / aspect;
+        if (imgH > maxH) { imgH = maxH; imgW = imgH * aspect; }
+        const imgX = margin + (contentWidth - imgW) / 2;
+        checkBreak(imgH + 8);
+        doc.addImage(dataUrl, 'JPEG', imgX, y, imgW, imgH);
+        y += imgH + 3;
+        if (caption) addText(caption, 9, false, [107, 114, 128], 4);
+        else y += 2;
+      };
+
+      // ── Passos ───────────────────────────────────────────────────────────
+      for (let index = 0; index < tutorial.steps.length; index++) {
+        const step = tutorial.steps[index];
+
+        // Badge do passo — garante espaço para o badge + pelo menos uma linha de título
+        checkBreak(24);
         doc.setFillColor(239, 246, 255);
         doc.setDrawColor(191, 219, 254);
         doc.roundedRect(margin, y, contentWidth, 8, 2, 2, 'FD');
-        doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(37, 99, 235);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(37, 99, 235);
         doc.text(`Passo ${index + 1} de ${tutorial.steps.length}`, margin + 3, y + 5.5);
-        y += 11;
-        addText(step.title, 14, true, [17, 24, 39]);
-        y += 1;
-        const content = stripHtml(step.content);
-        if (content) addText(content, 11, false, [55, 65, 81]);
-        step.media.forEach((media) => {
-          checkBreak(8);
-          doc.setFontSize(9); doc.setFont('helvetica', 'italic'); doc.setTextColor(107, 114, 128);
-          if (media.media_type === 'image') {
-            const lines = doc.splitTextToSize(media.caption ? `📷 Imagem: ${media.caption}` : '📷 Imagem anexada', contentWidth - 6) as string[];
-            doc.text(lines, margin + 3, y); y += lines.length * lineH(9) + 2;
-          } else if (media.media_type === 'video_embed' && media.embed_url) {
-            const lines = doc.splitTextToSize(media.caption ? `▶ Vídeo: ${media.caption}` : '▶ Vídeo incorporado', contentWidth - 6) as string[];
-            doc.text(lines, margin + 3, y); y += lines.length * lineH(9) + 2;
-          }
-        });
-        if (index < tutorial.steps.length - 1) { y += 3; addSeparator(true); }
-      });
+        y += 13;
 
+        // Título do passo
+        addText(step.title, 14, true, [17, 24, 39], 3);
+
+        // Conteúdo
+        const content = stripHtml(step.content);
+        if (content) addText(content, 11, false, [55, 65, 81], 3);
+
+        // Mídia
+        for (const media of step.media) {
+          if (media.media_type === 'image' && media.file_url) {
+            await addImageToPdf(media.file_url, media.caption || undefined);
+          } else if (media.media_type === 'video_embed' && media.embed_url) {
+            const label = media.caption ? `[ Video: ${media.caption} ]` : '[ Video incorporado ]';
+            addText(label, 9, false, [107, 114, 128], 3);
+          }
+        }
+
+        if (index < tutorial.steps.length - 1) { y += 4; addSeparator(true); }
+      }
+
+      // ── Rodapé em todas as páginas ────────────────────────────────────────
       const totalPages = (doc.internal as any).getNumberOfPages();
       for (let p = 1; p <= totalPages; p++) {
         doc.setPage(p);
-        doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(156, 163, 175);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(156, 163, 175);
         doc.text(`${tutorial.title} — Página ${p} de ${totalPages}`, pageWidth / 2, pageHeight - 8, { align: 'center' });
       }
 

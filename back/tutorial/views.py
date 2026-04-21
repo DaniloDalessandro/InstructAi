@@ -30,7 +30,7 @@ class TutorialViewSet(viewsets.ModelViewSet):
     """
     permission_classes = [IsOwnerOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['sector', 'tags', 'is_active']
+    filterset_fields = ['sector', 'is_active']
     search_fields = ['title', 'description']
     ordering_fields = ['created_at', 'updated_at', 'title']
     ordering = ['-created_at']
@@ -38,11 +38,17 @@ class TutorialViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Retorna tutoriais de acordo com as permissões do usuário"""
         queryset = Tutorial.objects.select_related('sector', 'created_by').prefetch_related('tags')
-        queryset = queryset.annotate(step_count=Count('steps'))
+        queryset = queryset.annotate(step_count=Count('steps', distinct=True))
 
         # Usuários não autenticados ou sem staff veem apenas tutoriais ativos
         if not self.request.user.is_authenticated or not self.request.user.is_staff:
             queryset = queryset.filter(is_active=True)
+
+        # Filtro OR de tags: retorna tutoriais que possuam qualquer uma das tags selecionadas
+        tag_ids = self.request.query_params.getlist('tags')
+        tag_ids = [t for t in tag_ids if t]
+        if tag_ids:
+            queryset = queryset.filter(tags__id__in=tag_ids).distinct()
 
         return queryset
 

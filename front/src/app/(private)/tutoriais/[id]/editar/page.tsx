@@ -338,7 +338,7 @@ export default function EditarTutorialPage() {
                   value={formData.sector}
                   onValueChange={(v) => setFormData({ ...formData, sector: v })}
                 >
-                  <SelectTrigger className="h-12">
+                  <SelectTrigger className="h-11">
                     <SelectValue placeholder="Selecione o setor" />
                   </SelectTrigger>
                   <SelectContent>
@@ -360,7 +360,7 @@ export default function EditarTutorialPage() {
                       setFormData({ ...formData, tags: [...formData.tags, v] });
                   }}
                 >
-                  <SelectTrigger className="h-12">
+                  <SelectTrigger className="h-11">
                     <SelectValue placeholder="Adicionar tags" />
                   </SelectTrigger>
                   <SelectContent>

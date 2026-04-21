@@ -257,11 +257,11 @@ def _execute_tool(tool_name: str, tool_args: dict) -> str:
             limit = min(int(tool_args.get("limit", 10)), 20)
 
             if query:
-                qs = qs.filter(title__icontains=query)
+                qs = qs.filter(name__icontains=query)
 
             results = [
                 {
-                    "titulo": c.title,
+                    "titulo": c.name,
                     "descricao": (c.description or "")[:120],
                     "criado_em": c.created_at.strftime("%d/%m/%Y"),
                 }

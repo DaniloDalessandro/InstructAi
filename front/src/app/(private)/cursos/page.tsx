@@ -156,7 +156,7 @@ export default function CursosPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 flex-1">
             {/* Status Filter */}
             <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as CourseStatus)}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger className="h-9 w-full">
                 <SelectValue placeholder="Todos os status" />
               </SelectTrigger>
               <SelectContent>
@@ -182,7 +182,7 @@ export default function CursosPage() {
 
             {/* Sector Filter */}
             <Select value={selectedSector} onValueChange={setSelectedSector}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger className="h-9 w-full">
                 <SelectValue placeholder="Todos os setores" />
               </SelectTrigger>
               <SelectContent>

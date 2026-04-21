@@ -47,10 +47,6 @@ class Tutorial(models.Model):
     def __str__(self):
         return self.title
 
-    @property
-    def step_count(self):
-        """Returns the number of steps in this tutorial"""
-        return self.steps.count()
 
 
 class TutorialStep(models.Model):
