@@ -16,7 +16,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { TagMultiSelect } from '@/components/manual/TagMultiSelect';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   ChevronLeft,
   Plus,
@@ -29,6 +36,7 @@ import {
   Loader2,
   CheckCircle2,
   Circle,
+  ChevronDown,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import ImageAnnotationEditor from '@/components/forms/ImageAnnotationEditor';
@@ -208,26 +216,25 @@ export default function NovoTutorialPage() {
   ];
 
   return (
-    <div className="animate-in fade-in duration-500">
-      {/* Header */}
-      <div className="mb-6">
-        <button
-          type="button"
-          onClick={() => router.push('/tutoriais')}
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-1.5"
-        >
-          <ChevronLeft className="h-3.5 w-3.5" />
-          Tutoriais
-        </button>
-        <h1 className="text-2xl font-bold tracking-tight">Novo Tutorial</h1>
-      </div>
+    <div className="-mx-4 -my-6 md:-mx-6 h-[calc(100vh-3.5rem)] overflow-hidden flex animate-in fade-in duration-500">
 
-      {/* Two-column layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 items-start">
+      {/* ── Left column: scrollable form ── */}
+      <div className="flex-1 overflow-y-auto px-4 py-6 md:px-6 animate-in slide-in-from-left-4 duration-500">
 
-        {/* ── Left column: form ── */}
-        <div className="animate-in slide-in-from-left-4 duration-500">
-          <form id="novo-tutorial-form" onSubmit={handleSubmit} className="space-y-6">
+        {/* Header */}
+        <div className="mb-6">
+          <button
+            type="button"
+            onClick={() => router.push('/tutoriais')}
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-1.5"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+            Tutoriais
+          </button>
+          <h1 className="text-2xl font-bold tracking-tight">Novo Tutorial</h1>
+        </div>
+
+        <form id="novo-tutorial-form" onSubmit={handleSubmit} className="space-y-6">
 
             {/* Seção 01 — Informações do Tutorial */}
             <div className="rounded-2xl border bg-card p-6 space-y-5">
@@ -275,15 +282,13 @@ export default function NovoTutorialPage() {
               {/* Setor + Tags em grid 2 colunas */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="space-y-1.5">
-                  <Label htmlFor="sector">
-                    Setor <span className="text-destructive">*</span>
-                  </Label>
+                  <Label>Setor <span className="text-destructive">*</span></Label>
                   <Select
                     value={formData.sector}
                     onValueChange={(value) => setFormData({ ...formData, sector: value })}
                   >
-                    <SelectTrigger className="h-11">
-                      <SelectValue placeholder="Selecione o setor" />
+                    <SelectTrigger className="h-10 w-full">
+                      <SelectValue placeholder="Selecione o setor..." />
                     </SelectTrigger>
                     <SelectContent>
                       {sectors.map((sector) => (
@@ -296,54 +301,13 @@ export default function NovoTutorialPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label>
-                    Tags <span className="text-muted-foreground font-normal">(opcional)</span>
-                  </Label>
-                  <Select
-                    value=""
-                    onValueChange={(value) => {
-                      if (!formData.tags.includes(value)) {
-                        setFormData({ ...formData, tags: [...formData.tags, value] });
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="h-11">
-                      <SelectValue placeholder="Adicionar tags" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {tags.map((tag) => (
-                        <SelectItem key={tag.id} value={tag.id.toString()}>
-                          {tag.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  {formData.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {formData.tags.map((tagId) => {
-                        const tag = tags.find((t) => t.id.toString() === tagId);
-                        return tag ? (
-                          <span
-                            key={tag.id}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium text-white"
-                            style={{ backgroundColor: tag.color }}
-                          >
-                            {tag.name}
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setFormData({ ...formData, tags: formData.tags.filter((t) => t !== tagId) })
-                              }
-                              className="hover:opacity-70 ml-0.5 leading-none"
-                            >
-                              ×
-                            </button>
-                          </span>
-                        ) : null;
-                      })}
-                    </div>
-                  )}
+                  <Label>Tags <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+                  <TagMultiSelect
+                    tags={tags}
+                    selectedTagIds={formData.tags}
+                    onSelectionChange={(ids) => setFormData({ ...formData, tags: ids })}
+                    placeholder="Adicionar tags..."
+                  />
                 </div>
               </div>
             </div>
@@ -368,12 +332,12 @@ export default function NovoTutorialPage() {
               <div className="flex flex-col items-stretch">
                 {steps.map((step, index) => (
                   <div key={index}>
-                    {/* Conector entre passos */}
+                    {/* Seta animada entre passos */}
                     {index > 0 && (
-                      <div className="flex flex-col items-center py-0.5 ml-[11px]">
-                        <div className="w-px h-5 bg-border" />
-                        <div className="w-2 h-2 rounded-full bg-primary/30" />
-                        <div className="w-px h-5 bg-border" />
+                      <div className="flex flex-col items-center py-1">
+                        <div className="w-px h-3 bg-border" />
+                        <ChevronDown className="w-4 h-4 text-primary/50 animate-bounce" />
+                        <div className="w-px h-3 bg-border" />
                       </div>
                     )}
 
@@ -551,11 +515,11 @@ export default function NovoTutorialPage() {
                   </div>
                 ))}
 
-                {/* Conector antes do botão */}
-                <div className="flex flex-col items-center py-0.5 ml-[11px]">
-                  <div className="w-px h-5 bg-border" />
-                  <div className="w-2 h-2 rounded-full bg-primary/30" />
-                  <div className="w-px h-5 bg-border" />
+                {/* Seta animada antes do botão */}
+                <div className="flex flex-col items-center py-1">
+                  <div className="w-px h-3 bg-border" />
+                  <ChevronDown className="w-4 h-4 text-primary/40 animate-bounce" />
+                  <div className="w-px h-3 bg-border" />
                 </div>
 
                 {/* Botão Adicionar Passo */}
@@ -599,11 +563,11 @@ export default function NovoTutorialPage() {
               </Button>
             </div>
           </form>
-        </div>
+      </div>
 
-        {/* ── Right column: live preview (hidden on mobile/tablet) ── */}
-        <div className="hidden lg:block animate-in slide-in-from-right-4 duration-500 delay-150">
-          <div className="sticky top-6 space-y-4">
+      {/* ── Right column: fixed panel (hidden on mobile/tablet) ── */}
+      <div className="hidden lg:flex flex-col gap-4 w-[380px] shrink-0 overflow-y-auto py-6 pr-4 md:pr-6 animate-in slide-in-from-right-4 duration-500 delay-150">
+          <div className="space-y-4">
 
             {/* Preview card */}
             <div className="rounded-2xl border bg-card overflow-hidden shadow-sm">
@@ -723,7 +687,6 @@ export default function NovoTutorialPage() {
               </div>
             </div>
           </div>
-        </div>
       </div>
 
       <ImageAnnotationEditor
