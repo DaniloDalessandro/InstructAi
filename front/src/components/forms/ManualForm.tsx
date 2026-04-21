@@ -116,10 +116,10 @@ export default function ManualForm({ open, handleClose, initialData, onSubmit }:
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[620px] max-w-[95vw] p-0">
-        <form onSubmit={handleSubmit}>
+      <DialogContent className="sm:max-w-[620px] max-w-[95vw] p-0 flex flex-col max-h-[90vh]">
+        <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
           {/* Header */}
-          <div className="px-6 pt-6 pb-4 border-b">
+          <div className="px-6 pt-6 pb-4 border-b shrink-0">
             <DialogHeader>
               <DialogTitle className="text-lg font-semibold flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary grid place-items-center shrink-0">
@@ -134,12 +134,12 @@ export default function ManualForm({ open, handleClose, initialData, onSubmit }:
           </div>
 
           {loadingData ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <div className="flex flex-col items-center justify-center py-16 gap-3 flex-1">
               <Loader2 className="h-7 w-7 animate-spin text-primary" />
               <p className="text-sm text-muted-foreground">Carregando...</p>
             </div>
           ) : (
-            <div className="px-6 py-5 space-y-5">
+            <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
 
               {/* Nome */}
               <div className="space-y-1.5">
@@ -248,7 +248,7 @@ export default function ManualForm({ open, handleClose, initialData, onSubmit }:
           )}
 
           {/* Footer */}
-          <div className="px-6 pb-6 pt-2 flex justify-end gap-2 border-t mt-2">
+          <div className="px-6 pb-6 pt-4 flex justify-end gap-2 border-t shrink-0">
             <Button type="button" variant="outline" size="sm" onClick={handleClose} disabled={isLoading}>
               Cancelar
             </Button>
