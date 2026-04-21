@@ -23,20 +23,20 @@ import { cn } from "@/lib/utils"
 type ViewMode = "gallery" | "list"
 type SortMode = "recent" | "alpha" | "steps"
 
-// Gradient palette keyed by sector — each sector always maps to the same color
+// Solid color palette keyed by sector — each sector always maps to the same color
 const SECTOR_COLORS = [
-  "from-violet-500 via-purple-500 to-indigo-600",
-  "from-sky-500 via-blue-500 to-cyan-600",
-  "from-emerald-500 via-teal-500 to-green-600",
-  "from-rose-500 via-pink-500 to-red-600",
-  "from-amber-500 via-orange-500 to-yellow-600",
-  "from-fuchsia-500 via-pink-500 to-purple-600",
-  "from-cyan-500 via-sky-500 to-blue-600",
-  "from-lime-500 via-green-500 to-emerald-600",
-  "from-red-500 via-rose-500 to-pink-600",
-  "from-teal-500 via-cyan-500 to-sky-600",
-  "from-indigo-500 via-violet-500 to-purple-600",
-  "from-orange-500 via-amber-500 to-yellow-600",
+  "bg-violet-500",
+  "bg-sky-500",
+  "bg-emerald-500",
+  "bg-rose-500",
+  "bg-amber-500",
+  "bg-fuchsia-500",
+  "bg-cyan-500",
+  "bg-lime-500",
+  "bg-red-500",
+  "bg-teal-500",
+  "bg-indigo-500",
+  "bg-orange-500",
 ]
 
 function sectorColorIndex(name: string): number {
@@ -125,14 +125,18 @@ export default function TutoriaisPage() {
           </Link>
         </div>
 
-        {/* Toolbar */}
-        <div className="flex flex-col gap-2">
-          <div className="flex-1">
-            <TutorialFilters filters={filters} onFiltersChange={setFilters} />
-          </div>
+        {/* Toolbar — contêiner único com borda */}
+        <div className="rounded-xl border bg-card/80 backdrop-blur shadow-sm px-3 py-2.5 flex flex-col gap-2">
+          {/* Linha 1: filtros */}
+          <TutorialFilters filters={filters} onFiltersChange={setFilters} />
+
+          {/* Separador */}
+          <div className="h-px bg-border/60" />
+
+          {/* Linha 2: sort + view + contador */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <div className="inline-flex items-center rounded-lg border bg-card/80 backdrop-blur p-0.5 shadow-sm">
+              <div className="inline-flex items-center rounded-lg border bg-background/60 p-0.5">
                 {(["recent", "alpha", "steps"] as SortMode[]).map((s) => (
                   <button
                     key={s}
@@ -148,7 +152,7 @@ export default function TutoriaisPage() {
                   </button>
                 ))}
               </div>
-              <div className="inline-flex items-center rounded-lg border bg-card/80 backdrop-blur p-0.5 shadow-sm">
+              <div className="inline-flex items-center rounded-lg border bg-background/60 p-0.5">
                 <button onClick={() => setView("gallery")} className={cn("p-1.5 rounded-md transition-all", view === "gallery" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-muted")} title="Galeria">
                   <Grid3x3 className="w-3.5 h-3.5" />
                 </button>
@@ -251,18 +255,13 @@ function TutorialCard({
       <button
         onClick={onView}
         className={cn(
-          "relative w-full bg-gradient-to-br",
-          gradientClass,
-          "flex items-center justify-center px-5 py-6 overflow-hidden shrink-0 text-left"
+          "relative w-full flex items-center justify-center px-5 py-6 overflow-hidden shrink-0 text-left",
+          gradientClass
         )}
         tabIndex={-1}
         aria-hidden
       >
-        {/* Decorative circles */}
-        <span className="absolute -top-6 -right-6 w-28 h-28 rounded-full bg-white/10" />
-        <span className="absolute -bottom-8 -left-8 w-36 h-36 rounded-full bg-black/10" />
-
-        <span className="relative z-10 text-sm font-semibold text-white leading-snug line-clamp-3 drop-shadow">
+        <span className="relative z-10 text-sm font-semibold text-white leading-snug line-clamp-3">
           {t.title}
         </span>
 
@@ -402,7 +401,7 @@ function TutorialListView({
             {/* Title + tags */}
             <div className="flex items-center gap-3 min-w-0">
               <div className={cn(
-                "w-9 h-9 rounded-xl bg-gradient-to-br shrink-0 grid place-items-center",
+                "w-9 h-9 rounded-xl shrink-0 grid place-items-center",
                 gradientClass
               )}>
                 <GraduationCap className="w-4 h-4 text-white" />

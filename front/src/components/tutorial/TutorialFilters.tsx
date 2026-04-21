@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Search } from 'lucide-react';
 import { getSectors } from '@/lib/api/sectors';
 import { getTags } from '@/lib/api/tags';
@@ -77,59 +76,49 @@ export function TutorialFilters({ filters, onFiltersChange }: TutorialFiltersPro
   }
 
   return (
-    <div className="space-y-4 p-4 border rounded-lg bg-card">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">Filtros</h3>
-        {hasActiveFilters && (
-          <button
-            onClick={clearFilters}
-            className="text-sm text-muted-foreground hover:text-foreground underline"
-          >
-            Limpar filtros
-          </button>
-        )}
+    <div className="flex flex-wrap items-center gap-2">
+      {/* Busca */}
+      <div className="relative flex-1 min-w-[180px]">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          id="search"
+          type="text"
+          placeholder="Buscar tutorial..."
+          value={filters.search}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          className="pl-9 h-9 w-full"
+        />
       </div>
 
-      {/* GRID DOS FILTROS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Buscar por nome - MAIOR */}
-        <div className="space-y-2 md:col-span-2">
-          <Label htmlFor="search">Buscar por nome</Label>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              id="search"
-              type="text"
-              placeholder="Digite o nome do tutorial..."
-              value={filters.search}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              className="pl-10 w-full"
-            />
-          </div>
-        </div>
-
-        {/* Filtrar por setores - MENOR */}
-        <div className="space-y-2">
-          <Label htmlFor="sectors">Filtrar por setores</Label>
-          <SectorMultiSelect
-            sectors={sectors}
-            selectedSectorIds={filters.sectors}
-            onSelectionChange={handleSectorsChange}
-            placeholder="Selecione setores..."
-          />
-        </div>
-
-        {/* Filtrar por tags - largura total */}
-        <div className="space-y-2 md:col-span-3">
-          <Label htmlFor="tags">Filtrar por tags</Label>
-          <TagMultiSelect
-            tags={tags}
-            selectedTagIds={filters.tags}
-            onSelectionChange={handleTagsChange}
-            placeholder="Selecione tags..."
-          />
-        </div>
+      {/* Setores */}
+      <div className="flex-1 min-w-[160px]">
+        <SectorMultiSelect
+          sectors={sectors}
+          selectedSectorIds={filters.sectors}
+          onSelectionChange={handleSectorsChange}
+          placeholder="Setor..."
+        />
       </div>
+
+      {/* Tags */}
+      <div className="flex-1 min-w-[160px]">
+        <TagMultiSelect
+          tags={tags}
+          selectedTagIds={filters.tags}
+          onSelectionChange={handleTagsChange}
+          placeholder="Tag..."
+        />
+      </div>
+
+      {/* Limpar */}
+      {hasActiveFilters && (
+        <button
+          onClick={clearFilters}
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
+        >
+          Limpar
+        </button>
+      )}
     </div>
   );
 }
