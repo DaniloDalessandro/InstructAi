@@ -23,17 +23,27 @@ import { cn } from "@/lib/utils"
 type ViewMode = "gallery" | "list"
 type SortMode = "recent" | "alpha" | "steps"
 
-// Gradient palette for card thumbnails — cycles through by index
-const CARD_GRADIENTS = [
-  "from-violet-500/80 via-purple-600/70 to-indigo-700/80",
-  "from-sky-500/80 via-blue-600/70 to-cyan-700/80",
-  "from-emerald-500/80 via-teal-600/70 to-green-700/80",
-  "from-rose-500/80 via-pink-600/70 to-red-700/80",
-  "from-amber-500/80 via-orange-600/70 to-yellow-700/80",
-  "from-fuchsia-500/80 via-pink-600/70 to-purple-700/80",
-  "from-cyan-500/80 via-sky-600/70 to-blue-700/80",
-  "from-lime-500/80 via-green-600/70 to-emerald-700/80",
+// Gradient palette keyed by sector — each sector always maps to the same color
+const SECTOR_COLORS = [
+  "from-violet-500 via-purple-500 to-indigo-600",
+  "from-sky-500 via-blue-500 to-cyan-600",
+  "from-emerald-500 via-teal-500 to-green-600",
+  "from-rose-500 via-pink-500 to-red-600",
+  "from-amber-500 via-orange-500 to-yellow-600",
+  "from-fuchsia-500 via-pink-500 to-purple-600",
+  "from-cyan-500 via-sky-500 to-blue-600",
+  "from-lime-500 via-green-500 to-emerald-600",
+  "from-red-500 via-rose-500 to-pink-600",
+  "from-teal-500 via-cyan-500 to-sky-600",
+  "from-indigo-500 via-violet-500 to-purple-600",
+  "from-orange-500 via-amber-500 to-yellow-600",
 ]
+
+function sectorColorIndex(name: string): number {
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  return Math.abs(hash) % SECTOR_COLORS.length
+}
 
 export default function TutoriaisPage() {
   const router = useRouter()
@@ -94,15 +104,12 @@ export default function TutoriaisPage() {
   }
 
   return (
-    <div
-      className={cn(
-        "relative -mx-4 -my-6 md:-mx-6 min-h-[calc(100vh-3.5rem)]",
-        "bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,oklch(from_var(--primary)_l_c_h/0.06),transparent_70%),radial-gradient(ellipse_60%_40%_at_20%_100%,oklch(0.58_0.22_310/0.05),transparent_70%)]"
-      )}
-    >
-      <div className="px-4 py-6 md:px-6 space-y-5 animate-in fade-in duration-300">
+    <div className="-mx-4 -my-6 md:-mx-6 h-[calc(100vh-3.5rem)] flex flex-col overflow-hidden">
 
-        {/* ── Header ─────────────────────────────────────────── */}
+      {/* ── Header + Toolbar fixos ─────────────────────────── */}
+      <div className="px-4 pt-6 pb-3 md:px-6 space-y-4 shrink-0 animate-in fade-in duration-300">
+
+        {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Tutoriais</h1>
@@ -118,14 +125,11 @@ export default function TutoriaisPage() {
           </Link>
         </div>
 
-        {/* ── Toolbar ────────────────────────────────────────── */}
+        {/* Toolbar */}
         <div className="flex flex-col gap-2">
-          {/* Linha 1: filtros */}
           <div className="flex-1">
             <TutorialFilters filters={filters} onFiltersChange={setFilters} />
           </div>
-
-          {/* Linha 2: ordenação + view toggle + contador */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <div className="inline-flex items-center rounded-lg border bg-card/80 backdrop-blur p-0.5 shadow-sm">
@@ -145,18 +149,10 @@ export default function TutoriaisPage() {
                 ))}
               </div>
               <div className="inline-flex items-center rounded-lg border bg-card/80 backdrop-blur p-0.5 shadow-sm">
-                <button
-                  onClick={() => setView("gallery")}
-                  className={cn("p-1.5 rounded-md transition-all", view === "gallery" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-muted")}
-                  title="Galeria"
-                >
+                <button onClick={() => setView("gallery")} className={cn("p-1.5 rounded-md transition-all", view === "gallery" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-muted")} title="Galeria">
                   <Grid3x3 className="w-3.5 h-3.5" />
                 </button>
-                <button
-                  onClick={() => setView("list")}
-                  className={cn("p-1.5 rounded-md transition-all", view === "list" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-muted")}
-                  title="Lista"
-                >
+                <button onClick={() => setView("list")} className={cn("p-1.5 rounded-md transition-all", view === "list" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-muted")} title="Lista">
                   <List className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -170,19 +166,20 @@ export default function TutoriaisPage() {
             )}
           </div>
         </div>
+      </div>
 
-        {/* ── Content ────────────────────────────────────────── */}
+      {/* ── Área scrollável — apenas os cards ─────────────── */}
+      <div className="flex-1 overflow-y-auto px-4 pb-6 md:px-6">
         {isLoading ? (
           <SkeletonGrid />
         ) : tutorials.length === 0 ? (
           <EmptyState hasFilters={hasFilters} />
         ) : view === "gallery" ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {sortedTutorials.map((t, i) => (
+            {sortedTutorials.map((t) => (
               <TutorialCard
                 key={t.id}
                 tutorial={t}
-                index={i}
                 hovered={hoveredId === t.id}
                 onHover={setHoveredId}
                 onView={() => router.push(`/tutoriais/${t.id}`)}
@@ -227,10 +224,9 @@ export default function TutoriaisPage() {
 // Gallery Card
 // ────────────────────────────────────────────────────────────
 function TutorialCard({
-  tutorial: t, index, hovered, onHover, onView, onEdit, onDelete,
+  tutorial: t, hovered, onHover, onView, onEdit, onDelete,
 }: {
   tutorial: TutorialListItem
-  index: number
   hovered: boolean
   onHover: (id: string | null) => void
   onView: () => void
@@ -240,7 +236,7 @@ function TutorialCard({
   const updatedDays = Math.round((Date.now() - new Date(t.updated_at).getTime()) / 86400000)
   const freshness = updatedDays < 7 ? "novo" : updatedDays < 30 ? "atualizado" : null
   const sectorName = t.sector_detail?.name ?? "—"
-  const gradientClass = CARD_GRADIENTS[index % CARD_GRADIENTS.length]
+  const gradientClass = SECTOR_COLORS[sectorColorIndex(t.sector_detail?.name ?? "")]
 
   return (
     <article
@@ -393,9 +389,9 @@ function TutorialListView({
         <span className="w-20" />
       </div>
 
-      {tutorials.map((t, i) => {
+      {tutorials.map((t) => {
         const updatedDays = Math.round((Date.now() - new Date(t.updated_at).getTime()) / 86400000)
-        const gradientClass = CARD_GRADIENTS[i % CARD_GRADIENTS.length]
+        const gradientClass = SECTOR_COLORS[sectorColorIndex(t.sector_detail?.name ?? "")]
 
         return (
           <div

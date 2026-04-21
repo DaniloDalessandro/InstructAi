@@ -342,10 +342,7 @@ export default function AlicePage() {
 
   return (
     <div
-      className={cn(
-        "relative -mx-4 -my-6 md:-mx-6 h-[calc(100vh-3.5rem)] overflow-hidden flex flex-col",
-        "bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,oklch(from_var(--primary)_l_c_h/0.06),transparent_70%),radial-gradient(ellipse_60%_40%_at_20%_100%,oklch(0.58_0.22_310/0.05),transparent_70%)]"
-      )}
+      className="relative -mx-4 -my-6 md:-mx-6 h-[calc(100vh-3.5rem)] overflow-hidden flex flex-col"
     >
       {/* ── Top bar ───────────────────────────────────────── */}
       <header className="flex items-center gap-3 px-6 py-3 shrink-0 z-10">
