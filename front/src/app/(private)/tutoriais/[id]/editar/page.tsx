@@ -20,26 +20,40 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { TagMultiSelect } from '@/components/manual/TagMultiSelect';
 import {
-  ChevronLeft, Plus, Trash2, GripVertical, ArrowDown,
-  Image as ImageIcon, Video, Upload, X, Edit3, Loader2,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  ChevronLeft,
+  Plus,
+  Trash2,
+  Image as ImageIcon,
+  Video,
+  Upload,
+  X,
+  Edit3,
+  Loader2,
+  CheckCircle2,
+  Circle,
+  ChevronDown,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import ImageAnnotationEditor from '@/components/forms/ImageAnnotationEditor';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface StepDraft {
-  id?: string;                  // undefined = novo passo
+  id?: string;
   order: number;
   title: string;
   content: string;
-  // mídia nova a subir
   image?: File | null;
   imagePreview?: string;
   youtube_url?: string;
-  // mídia já existente no banco
   existingMediaId?: string;
   existingImageUrl?: string;
   existingVideoUrl?: string;
@@ -55,6 +69,9 @@ export default function EditarTutorialPage() {
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
 
+  const [editingImageIndex, setEditingImageIndex] = useState<number | null>(null);
+  const [editingImageUrl, setEditingImageUrl] = useState<string>('');
+
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -65,10 +82,6 @@ export default function EditarTutorialPage() {
 
   const [steps, setSteps] = useState<StepDraft[]>([]);
   const [deletedStepIds, setDeletedStepIds] = useState<string[]>([]);
-
-  // Image editor
-  const [editingImageIndex, setEditingImageIndex] = useState<number | null>(null);
-  const [editingImageUrl, setEditingImageUrl] = useState<string>('');
 
   useEffect(() => {
     loadAll();
@@ -94,7 +107,6 @@ export default function EditarTutorialPage() {
         is_active: tutorial.is_active,
       });
 
-      // Map existing steps to drafts
       const drafts: StepDraft[] = tutorial.steps.map((s: TutorialStep) => {
         const imgMedia = s.media.find((m) => m.media_type === 'image');
         const vidMedia = s.media.find((m) => m.media_type === 'video_embed');
@@ -119,8 +131,6 @@ export default function EditarTutorialPage() {
     }
   };
 
-  // ── Step helpers ─────────────────────────────────────────────────────────
-
   const addStep = () => {
     setSteps((prev) => [...prev, { order: prev.length, title: '', content: '' }]);
   };
@@ -128,10 +138,9 @@ export default function EditarTutorialPage() {
   const removeStep = (index: number) => {
     const step = steps[index];
     if (step.id) setDeletedStepIds((prev) => [...prev, step.id!]);
-    setSteps((prev) => {
-      const next = prev.filter((_, i) => i !== index).map((s, i) => ({ ...s, order: i }));
-      return next;
-    });
+    setSteps((prev) =>
+      prev.filter((_, i) => i !== index).map((s, i) => ({ ...s, order: i }))
+    );
   };
 
   const updateStep = (index: number, field: keyof StepDraft, value: any) => {
@@ -177,8 +186,6 @@ export default function EditarTutorialPage() {
     setEditingImageUrl('');
   };
 
-  // ── Submit ────────────────────────────────────────────────────────────────
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title || !formData.description || !formData.sector) {
@@ -188,29 +195,23 @@ export default function EditarTutorialPage() {
 
     setIsSubmitting(true);
     try {
-      // 1. Update tutorial metadata
       await updateTutorial(id, formData);
 
-      // 2. Delete removed steps
       for (const stepId of deletedStepIds) {
         await deleteTutorialStep(stepId);
       }
 
-      // 3. Create or update steps
       for (const step of steps) {
         if (!step.title && !step.content) continue;
-
         let stepId = step.id;
 
         if (stepId) {
-          // Update existing step
           await updateTutorialStep(stepId, {
             order: step.order,
             title: step.title,
             content: step.content,
           });
         } else {
-          // Create new step
           const created = await createTutorialStep({
             tutorial: id,
             order: step.order,
@@ -220,18 +221,12 @@ export default function EditarTutorialPage() {
           stepId = created.id;
         }
 
-        // 4. Handle media for this step
         if (step.removeExistingMedia && step.existingMediaId) {
           await deleteTutorialMedia(step.existingMediaId);
         }
 
         if (step.image && stepId) {
-          await createTutorialMedia({
-            step: stepId,
-            media_type: 'image',
-            file: step.image,
-            order: 1,
-          });
+          await createTutorialMedia({ step: stepId, media_type: 'image', file: step.image, order: 1 });
         } else if (step.youtube_url && stepId && step.youtube_url !== step.existingVideoUrl) {
           if (step.existingMediaId && !step.removeExistingMedia) {
             await deleteTutorialMedia(step.existingMediaId);
@@ -254,62 +249,84 @@ export default function EditarTutorialPage() {
     }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // Derived preview data
+  const selectedSector = sectors.find((s) => s.id.toString() === formData.sector);
+  const selectedTags = tags.filter((t) => formData.tags.includes(t.id.toString()));
+  const stepsWithTitle = steps.filter((s) => s.title).length;
+
+  const checks = [
+    { label: 'Título preenchido', done: !!formData.title },
+    { label: 'Descrição adicionada', done: !!formData.description },
+    { label: 'Setor selecionado', done: !!formData.sector },
+    {
+      label: `${stepsWithTitle} de ${steps.length} passos com título`,
+      done: steps.length > 0 && steps.every((s) => s.title),
+    },
+  ];
 
   if (isLoading) {
     return (
-      <div className="space-y-5">
-        <div className="flex items-center gap-3">
-          <div className="h-8 w-20 bg-muted animate-pulse rounded" />
-          <div className="h-5 w-px bg-border" />
-          <div className="h-5 w-40 bg-muted animate-pulse rounded" />
-        </div>
-        <div className="h-8 w-64 bg-muted animate-pulse rounded" />
-        <div className="border rounded-xl p-6 space-y-4">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-10 bg-muted animate-pulse rounded" />
-          ))}
+      <div className="-mx-4 -my-6 md:-mx-6 h-[calc(100vh-3.5rem)] overflow-hidden flex">
+        <div className="flex-1 overflow-y-auto px-4 py-6 md:px-6 space-y-6 animate-pulse">
+          <div className="space-y-1.5">
+            <div className="h-4 w-20 bg-muted rounded" />
+            <div className="h-8 w-52 bg-muted rounded" />
+          </div>
+          <div className="rounded-2xl border bg-card p-6 space-y-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-10 bg-muted rounded" />
+            ))}
+          </div>
+          <div className="rounded-2xl border bg-card p-6 space-y-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-10 bg-muted rounded" />
+            ))}
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-5 animate-fade-in">
-      {/* Header breadcrumb */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+    <div className="-mx-4 -my-6 md:-mx-6 h-[calc(100vh-3.5rem)] overflow-hidden flex animate-in fade-in duration-500">
+
+      {/* ── Left column: scrollable form ── */}
+      <div className="flex-1 overflow-y-auto px-4 py-6 md:px-6 animate-in slide-in-from-left-4 duration-500">
+
+        {/* Header */}
+        <div className="mb-6">
           <button
             type="button"
             onClick={() => router.push(`/tutoriais/${id}`)}
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-1"
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-1.5"
           >
             <ChevronLeft className="h-3.5 w-3.5" />
-            Tutoriais
+            Tutorial
           </button>
           <h1 className="text-2xl font-bold tracking-tight">Editar Tutorial</h1>
         </div>
-        <div className="flex gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => router.push(`/tutoriais/${id}`)}>
-            Cancelar
-          </Button>
-          <Button type="submit" form="edit-tutorial-form" size="sm" disabled={isSubmitting}>
-            {isSubmitting ? (
-              <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Salvando...</>
-            ) : 'Salvar Alterações'}
-          </Button>
-        </div>
-      </div>
 
-      <form id="edit-tutorial-form" onSubmit={handleSubmit} className="space-y-5">
-        {/* Informações Básicas */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Informações Básicas</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="title">Título do Tutorial *</Label>
+        <form id="edit-tutorial-form" onSubmit={handleSubmit} className="space-y-6">
+
+          {/* Seção 01 — Informações do Tutorial */}
+          <div className="rounded-2xl border bg-card p-6 space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-primary/10 text-primary text-sm font-bold grid place-items-center shrink-0">
+                01
+              </div>
+              <div>
+                <h2 className="text-base font-semibold tracking-tight">Informações do Tutorial</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Dados principais que identificam o tutorial</p>
+              </div>
+            </div>
+
+            <div className="h-px bg-border" />
+
+            {/* Título */}
+            <div className="space-y-1.5">
+              <Label htmlFor="title">
+                Título do Tutorial <span className="text-destructive">*</span>
+              </Label>
               <Input
                 id="title"
                 value={formData.title}
@@ -319,314 +336,461 @@ export default function EditarTutorialPage() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="description">Descrição *</Label>
+            {/* Descrição */}
+            <div className="space-y-1.5">
+              <Label htmlFor="description">
+                Descrição <span className="text-destructive">*</span>
+              </Label>
               <Textarea
                 id="description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 placeholder="Descreva o que será ensinado neste tutorial"
-                rows={4}
+                rows={3}
                 className="resize-none"
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label>Setor *</Label>
+            {/* Setor + Tags */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="space-y-1.5">
+                <Label>Setor <span className="text-destructive">*</span></Label>
                 <Select
                   value={formData.sector}
-                  onValueChange={(v) => setFormData({ ...formData, sector: v })}
+                  onValueChange={(value) => setFormData({ ...formData, sector: value })}
                 >
-                  <SelectTrigger className="h-11">
-                    <SelectValue placeholder="Selecione o setor" />
+                  <SelectTrigger className="h-10 w-full">
+                    <SelectValue placeholder="Selecione o setor..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {sectors.map((s) => (
-                      <SelectItem key={s.id} value={s.id.toString()}>
-                        {s.name}
+                    {sectors.map((sector) => (
+                      <SelectItem key={sector.id} value={sector.id.toString()}>
+                        {sector.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <Label>Tags (opcional)</Label>
-                <Select
-                  value=""
-                  onValueChange={(v) => {
-                    if (!formData.tags.includes(v))
-                      setFormData({ ...formData, tags: [...formData.tags, v] });
-                  }}
-                >
-                  <SelectTrigger className="h-11">
-                    <SelectValue placeholder="Adicionar tags" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {tags.map((t) => (
-                      <SelectItem key={t.id} value={t.id.toString()}>
-                        {t.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {formData.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {formData.tags.map((tagId) => {
-                      const tag = tags.find((t) => t.id.toString() === tagId);
-                      return tag ? (
-                        <span
-                          key={tag.id}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium text-white"
-                          style={{ backgroundColor: tag.color }}
-                        >
-                          {tag.name}
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setFormData({ ...formData, tags: formData.tags.filter((t) => t !== tagId) })
-                            }
-                            className="hover:opacity-70 ml-1"
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ) : null;
-                    })}
-                  </div>
-                )}
+              <div className="space-y-1.5">
+                <Label>Tags <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+                <TagMultiSelect
+                  tags={tags}
+                  selectedTagIds={formData.tags}
+                  onSelectionChange={(ids) => setFormData({ ...formData, tags: ids })}
+                  placeholder="Adicionar tags..."
+                />
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Passos */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Passos do Tutorial</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">
-              Adicione, edite ou remova os passos deste tutorial
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {steps.map((step, index) => (
-              <div key={step.id ?? index}>
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex items-start gap-4">
-                      <GripVertical className="h-5 w-5 text-muted-foreground mt-2 flex-shrink-0" />
-                      <div className="flex-1 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-muted-foreground">
-                            Passo {index + 1}
-                            {!step.id && (
-                              <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                                Novo
-                              </span>
-                            )}
+          {/* Seção 02 — Passos do Tutorial */}
+          <div className="space-y-4">
+            <div className="rounded-2xl border bg-card p-6 pb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-primary/10 text-primary text-sm font-bold grid place-items-center shrink-0">
+                  02
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold tracking-tight">Passos do Tutorial</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Adicione, edite ou remova os passos deste tutorial
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Timeline de passos */}
+            <div className="flex flex-col items-stretch">
+              {steps.map((step, index) => (
+                <div key={step.id ?? index}>
+                  {index > 0 && (
+                    <div className="flex flex-col items-center py-1">
+                      <div className="w-px h-3 bg-border" />
+                      <ChevronDown className="w-4 h-4 text-primary/50 animate-bounce" />
+                      <div className="w-px h-3 bg-border" />
+                    </div>
+                  )}
+
+                  <div
+                    className="rounded-2xl border bg-card hover:border-primary/40 transition-all animate-in slide-in-from-bottom-4 fade-in duration-300"
+                    style={{ animationDelay: `${index * 60}ms` }}
+                  >
+                    {/* Header do passo */}
+                    <div className="flex items-center gap-3 px-5 py-4 border-b">
+                      <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold grid place-items-center shrink-0">
+                        {index + 1}
+                      </div>
+                      <span className="flex-1 text-sm font-semibold flex items-center gap-2">
+                        Passo {index + 1}
+                        {!step.id && (
+                          <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
+                            Novo
                           </span>
-                          {steps.length > 1 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeStep(index)}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          )}
-                        </div>
+                        )}
+                      </span>
+                      {steps.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeStep(index)}
+                          className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
 
-                        <div className="space-y-2">
-                          <Label>Título do Passo</Label>
-                          <Input
-                            value={step.title}
-                            onChange={(e) => updateStep(index, 'title', e.target.value)}
-                            placeholder="Ex: Acessar o painel de controle"
-                            className="h-11"
-                          />
-                        </div>
+                    {/* Conteúdo do passo */}
+                    <div className="p-5 space-y-4">
+                      <div className="space-y-1.5">
+                        <Label>Título do Passo</Label>
+                        <Input
+                          value={step.title}
+                          onChange={(e) => updateStep(index, 'title', e.target.value)}
+                          placeholder="Ex: Acessar o painel de controle"
+                          className="h-11"
+                        />
+                      </div>
 
-                        <div className="space-y-2">
-                          <Label>Descrição do Passo</Label>
-                          <Textarea
-                            value={step.content}
-                            onChange={(e) => updateStep(index, 'content', e.target.value)}
-                            placeholder="Descreva em detalhes o que deve ser feito neste passo..."
-                            rows={5}
-                            className="resize-none"
-                          />
-                        </div>
+                      <div className="space-y-1.5">
+                        <Label>Descrição do Passo</Label>
+                        <Textarea
+                          value={step.content}
+                          onChange={(e) => updateStep(index, 'content', e.target.value)}
+                          placeholder="Descreva em detalhes o que deve ser feito neste passo..."
+                          rows={4}
+                          className="resize-none"
+                        />
+                      </div>
 
-                        {/* Mídia */}
-                        <div className="border-t pt-4">
-                          <h4 className="text-sm font-medium mb-3 text-muted-foreground">
-                            Recursos Multimídia (Opcional)
-                          </h4>
+                      {/* Recursos Multimídia */}
+                      <div className="space-y-2.5">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Recurso Multimídia
+                        </p>
 
-                          <Tabs
-                            defaultValue={
-                              step.existingImageUrl ? 'image'
-                              : step.existingVideoUrl ? 'video'
-                              : 'none'
-                            }
-                            className="w-full"
-                          >
-                            <TabsList className="grid w-full grid-cols-3 h-11">
-                              <TabsTrigger value="none" className="gap-2">
-                                <X className="h-4 w-4" /> Nenhum
-                              </TabsTrigger>
-                              <TabsTrigger value="image" className="gap-2">
-                                <ImageIcon className="h-4 w-4" /> Imagem
-                              </TabsTrigger>
-                              <TabsTrigger value="video" className="gap-2">
-                                <Video className="h-4 w-4" /> Vídeo
-                              </TabsTrigger>
-                            </TabsList>
+                        <Tabs
+                          defaultValue={
+                            step.existingImageUrl ? 'image'
+                            : step.existingVideoUrl ? 'video'
+                            : 'none'
+                          }
+                          className="w-full"
+                        >
+                          <TabsList className="h-9 w-full grid grid-cols-3">
+                            <TabsTrigger value="none" className="gap-1.5 text-xs">
+                              <X className="h-3.5 w-3.5" />
+                              Nenhum
+                            </TabsTrigger>
+                            <TabsTrigger value="image" className="gap-1.5 text-xs">
+                              <ImageIcon className="h-3.5 w-3.5" />
+                              Imagem
+                            </TabsTrigger>
+                            <TabsTrigger value="video" className="gap-1.5 text-xs">
+                              <Video className="h-3.5 w-3.5" />
+                              Vídeo
+                            </TabsTrigger>
+                          </TabsList>
 
-                            <TabsContent value="none" className="mt-4">
-                              <div className="text-center py-8 text-sm text-muted-foreground">
-                                Nenhum recurso multimídia neste passo
-                              </div>
-                            </TabsContent>
+                          <TabsContent value="none" className="mt-3">
+                            <div className="flex items-center justify-center h-20 rounded-xl bg-muted/30 border border-dashed">
+                              <p className="text-xs text-muted-foreground">
+                                Nenhum recurso adicionado a este passo
+                              </p>
+                            </div>
+                          </TabsContent>
 
-                            <TabsContent value="image" className="mt-4 space-y-3">
-                              {/* Imagem existente (sem nova imagem carregada) */}
-                              {step.existingImageUrl && !step.imagePreview && !step.removeExistingMedia && (
-                                <div className="relative border rounded-lg overflow-hidden bg-muted/30">
-                                  <img
-                                    src={step.existingImageUrl}
-                                    alt="Imagem atual"
-                                    className="w-full max-h-64 object-contain"
-                                  />
-                                  <div className="absolute top-3 right-3 flex gap-2">
-                                    <Button
-                                      type="button"
-                                      variant="secondary"
-                                      size="sm"
-                                      className="bg-background/90 hover:bg-background shadow-lg"
-                                      onClick={() => openImageEditor(index)}
-                                    >
-                                      <Edit3 className="h-4 w-4 mr-2" /> Anotar
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="destructive"
-                                      size="sm"
-                                      onClick={() => {
-                                        updateStep(index, 'removeExistingMedia', true);
-                                        updateStep(index, 'existingImageUrl', undefined);
-                                      }}
-                                    >
-                                      <X className="h-4 w-4 mr-2" /> Remover
-                                    </Button>
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Nova imagem carregada */}
-                              {step.imagePreview && (
-                                <div className="relative border rounded-lg overflow-hidden bg-muted/30">
-                                  <img
-                                    src={step.imagePreview}
-                                    alt="Preview"
-                                    className="w-full max-h-64 object-contain"
-                                  />
-                                  <div className="absolute top-3 right-3 flex gap-2">
-                                    <Button
-                                      type="button"
-                                      variant="secondary"
-                                      size="sm"
-                                      className="bg-background/90 hover:bg-background shadow-lg"
-                                      onClick={() => openImageEditor(index)}
-                                    >
-                                      <Edit3 className="h-4 w-4 mr-2" /> Anotar
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="destructive"
-                                      size="sm"
-                                      onClick={() => {
-                                        updateStep(index, 'image', null);
-                                        updateStep(index, 'imagePreview', '');
-                                      }}
-                                    >
-                                      <X className="h-4 w-4 mr-2" /> Remover
-                                    </Button>
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Upload zone (quando não tem imagem) */}
-                              {!step.imagePreview && (!step.existingImageUrl || step.removeExistingMedia) && (
-                                <div className="relative">
-                                  <input
-                                    id={`image-${index}`}
-                                    type="file"
-                                    accept="image/*"
-                                    className="hidden"
-                                    onChange={(e) => handleImageUpload(index, e.target.files?.[0] ?? null)}
-                                  />
-                                  <label
-                                    htmlFor={`image-${index}`}
-                                    className="flex flex-col items-center justify-center h-48 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50 hover:border-primary/50 transition-all"
-                                  >
-                                    <Upload className="h-8 w-8 text-muted-foreground mb-3" />
-                                    <span className="text-base font-medium">Clique para adicionar imagem</span>
-                                    <span className="text-sm text-muted-foreground">PNG, JPG, GIF até 5MB</span>
-                                  </label>
-                                </div>
-                              )}
-                            </TabsContent>
-
-                            <TabsContent value="video" className="mt-4 space-y-3">
-                              <div className="space-y-2">
-                                <Label>URL do YouTube</Label>
-                                <Input
-                                  value={step.youtube_url ?? step.existingVideoUrl ?? ''}
-                                  onChange={(e) => updateStep(index, 'youtube_url', e.target.value)}
-                                  placeholder="https://www.youtube.com/watch?v=..."
-                                  className="h-11"
+                          <TabsContent value="image" className="mt-3 space-y-3">
+                            {/* Imagem existente */}
+                            {step.existingImageUrl && !step.imagePreview && !step.removeExistingMedia && (
+                              <div className="relative rounded-xl border overflow-hidden bg-muted/30">
+                                <img
+                                  src={step.existingImageUrl}
+                                  alt="Imagem atual"
+                                  className="w-full max-h-64 object-contain"
                                 />
-                              </div>
-                              {(step.youtube_url || step.existingVideoUrl) && (
-                                <div className="border rounded-lg p-4 bg-muted/30 text-center">
-                                  <Video className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
-                                  <p className="text-sm text-muted-foreground">Vídeo será exibido aqui</p>
+                                <div className="absolute top-3 right-3 flex gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    className="bg-background/90 hover:bg-background shadow-md text-xs h-8"
+                                    onClick={() => openImageEditor(index)}
+                                  >
+                                    <Edit3 className="h-3.5 w-3.5 mr-1.5" />
+                                    Anotar
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="destructive"
+                                    size="sm"
+                                    className="text-xs h-8"
+                                    onClick={() => {
+                                      updateStep(index, 'removeExistingMedia', true);
+                                      updateStep(index, 'existingImageUrl', undefined);
+                                    }}
+                                  >
+                                    <X className="h-3.5 w-3.5 mr-1.5" />
+                                    Remover
+                                  </Button>
                                 </div>
-                              )}
-                            </TabsContent>
-                          </Tabs>
-                        </div>
+                              </div>
+                            )}
+
+                            {/* Nova imagem */}
+                            {step.imagePreview && (
+                              <div className="relative rounded-xl border overflow-hidden bg-muted/30">
+                                <img
+                                  src={step.imagePreview}
+                                  alt="Preview"
+                                  className="w-full max-h-64 object-contain"
+                                />
+                                <div className="absolute top-3 right-3 flex gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    className="bg-background/90 hover:bg-background shadow-md text-xs h-8"
+                                    onClick={() => openImageEditor(index)}
+                                  >
+                                    <Edit3 className="h-3.5 w-3.5 mr-1.5" />
+                                    Anotar
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="destructive"
+                                    size="sm"
+                                    className="text-xs h-8"
+                                    onClick={() => {
+                                      updateStep(index, 'image', null);
+                                      updateStep(index, 'imagePreview', '');
+                                    }}
+                                  >
+                                    <X className="h-3.5 w-3.5 mr-1.5" />
+                                    Remover
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Upload zone */}
+                            {!step.imagePreview && (!step.existingImageUrl || step.removeExistingMedia) && (
+                              <div className="relative">
+                                <input
+                                  id={`image-edit-${index}`}
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={(e) => handleImageUpload(index, e.target.files?.[0] ?? null)}
+                                />
+                                <label
+                                  htmlFor={`image-edit-${index}`}
+                                  className="flex flex-col items-center justify-center h-40 rounded-xl border-2 border-dashed border-muted-foreground/25 cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all group"
+                                >
+                                  <div className="w-10 h-10 rounded-xl bg-muted grid place-items-center mb-2 group-hover:bg-primary/10 transition-colors">
+                                    <Upload className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                                  </div>
+                                  <span className="text-sm font-medium text-foreground">
+                                    Clique para enviar imagem
+                                  </span>
+                                  <span className="text-xs text-muted-foreground mt-0.5">
+                                    PNG, JPG, GIF — até 5 MB
+                                  </span>
+                                </label>
+                              </div>
+                            )}
+                          </TabsContent>
+
+                          <TabsContent value="video" className="mt-3 space-y-3">
+                            <div className="space-y-1.5">
+                              <Label>URL do YouTube</Label>
+                              <Input
+                                value={step.youtube_url ?? step.existingVideoUrl ?? ''}
+                                onChange={(e) => updateStep(index, 'youtube_url', e.target.value)}
+                                placeholder="https://www.youtube.com/watch?v=..."
+                                className="h-11"
+                              />
+                            </div>
+                            {(step.youtube_url || step.existingVideoUrl) && (
+                              <div className="rounded-xl border overflow-hidden bg-muted/30">
+                                <div className="flex items-center justify-center gap-3 py-6">
+                                  <div className="w-10 h-10 rounded-xl bg-red-500/10 text-red-500 grid place-items-center">
+                                    <Video className="h-5 w-5" />
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-medium">Vídeo do YouTube vinculado</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      Será exibido na visualização do tutorial
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </TabsContent>
+                        </Tabs>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-
-                {index < steps.length - 1 && (
-                  <div className="flex justify-center py-4">
-                    <ArrowDown className="h-6 w-6 text-muted-foreground animate-bounce" />
                   </div>
-                )}
-              </div>
-            ))}
+                </div>
+              ))}
 
-            <div className="pt-4">
-              <Button
+              {/* Seta antes do botão adicionar */}
+              <div className="flex flex-col items-center py-1">
+                <div className="w-px h-3 bg-border" />
+                <ChevronDown className="w-4 h-4 text-primary/40 animate-bounce" />
+                <div className="w-px h-3 bg-border" />
+              </div>
+
+              {/* Botão Adicionar Passo */}
+              <button
                 type="button"
                 onClick={addStep}
-                variant="outline"
-                className="w-full border-dashed border-2 h-12 hover:bg-primary/5 hover:border-primary"
+                className="w-full rounded-2xl border-2 border-dashed border-primary/30 hover:border-primary hover:bg-primary/5 py-4 flex items-center justify-center gap-2 text-sm font-medium text-muted-foreground hover:text-primary transition-all hover:scale-[1.01]"
               >
-                <Plus className="mr-2 h-5 w-5" />
-                Adicionar Novo Passo
-              </Button>
+                <div className="w-6 h-6 rounded-full bg-primary/10 grid place-items-center">
+                  <Plus className="h-3.5 w-3.5 text-primary" />
+                </div>
+                Adicionar Passo
+              </button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
 
-      </form>
+          {/* Ações — rodapé do form */}
+          <div className="flex gap-2 justify-end pt-2 pb-4">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => router.push(`/tutoriais/${id}`)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={isSubmitting}
+              className="bg-gradient-to-r from-primary to-purple-500 hover:opacity-90 transition-opacity text-white border-0"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                'Salvar Alterações'
+              )}
+            </Button>
+          </div>
+        </form>
+      </div>
+
+      {/* ── Right column: fixed preview panel ── */}
+      <div className="hidden lg:flex flex-col gap-4 w-[380px] shrink-0 overflow-y-auto py-6 pr-4 md:pr-6 animate-in slide-in-from-right-4 duration-500 delay-150">
+        <div className="space-y-4">
+
+          {/* Preview card */}
+          <div className="rounded-2xl border bg-card overflow-hidden shadow-sm">
+            <div className="h-28 bg-gradient-to-br from-primary/80 to-purple-500/80 relative flex flex-col justify-between p-4">
+              {selectedSector && (
+                <span className="self-start inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/20 text-white backdrop-blur-sm border border-white/20">
+                  {selectedSector.name}
+                </span>
+              )}
+              <h3 className="text-white font-semibold text-sm leading-snug line-clamp-2 transition-all duration-200">
+                {formData.title || (
+                  <span className="opacity-60">Título do tutorial...</span>
+                )}
+              </h3>
+            </div>
+
+            <div className="p-4 space-y-3">
+              {selectedTags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedTags.map((tag) => (
+                    <span
+                      key={tag.id}
+                      className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium text-white animate-in fade-in duration-200"
+                      style={{ backgroundColor: tag.color }}
+                    >
+                      {tag.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {formData.description ? (
+                <p className="text-xs text-muted-foreground line-clamp-3 transition-all duration-200">
+                  {formData.description}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground/40 italic">
+                  Descrição aparecerá aqui...
+                </p>
+              )}
+
+              {steps.length > 0 && <div className="h-px bg-border" />}
+
+              <div className="space-y-1.5">
+                {steps.map((step, index) => (
+                  <div key={index} className="flex items-start gap-2 animate-in fade-in duration-200">
+                    <span className="shrink-0 w-4 h-4 rounded-full bg-primary/10 text-primary text-[9px] font-bold grid place-items-center mt-0.5">
+                      {index + 1}
+                    </span>
+                    <span className="text-xs text-foreground leading-snug line-clamp-1">
+                      {step.title || (
+                        <span className="text-muted-foreground/50 italic">
+                          Passo {index + 1} — sem título
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Progress checklist */}
+          <div className="rounded-2xl border bg-card p-4 space-y-3 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              Progresso
+            </p>
+            <div className="space-y-2">
+              {checks.map((check, i) => (
+                <div key={i} className="flex items-center gap-2.5 transition-all duration-200">
+                  {check.done ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 transition-all duration-200" />
+                  ) : (
+                    <Circle className="h-4 w-4 text-muted-foreground/40 shrink-0 transition-all duration-200" />
+                  )}
+                  <span
+                    className={`text-xs transition-all duration-200 ${
+                      check.done ? 'text-foreground font-medium' : 'text-muted-foreground'
+                    }`}
+                  >
+                    {check.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-1">
+              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-primary to-purple-500 transition-all duration-500"
+                  style={{
+                    width: `${(checks.filter((c) => c.done).length / checks.length) * 100}%`,
+                  }}
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1.5 text-right">
+                {checks.filter((c) => c.done).length} de {checks.length} concluídos
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <ImageAnnotationEditor
         isOpen={editingImageIndex !== null}

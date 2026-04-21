@@ -75,10 +75,20 @@ export default function TutorialViewPage() {
 
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
-      const margin = 18;
+      const margin = 16;
       const contentWidth = pageWidth - margin * 2;
-      const bottomBoundary = pageHeight - margin - 10; // 10mm para o rodapé
-      let y = margin;
+      const bottomBoundary = pageHeight - 14;
+      let y = 0;
+
+      // ── Paleta ───────────────────────────────────────────────────────────
+      const PRIMARY: [number, number, number]   = [37, 99, 235];
+      const PRIMARY_LIGHT: [number, number, number] = [219, 234, 254];
+      const DARK: [number, number, number]      = [15, 23, 42];
+      const BODY: [number, number, number]      = [51, 65, 85];
+      const MUTED: [number, number, number]     = [100, 116, 139];
+      const BORDER: [number, number, number]    = [226, 232, 240];
+      const WHITE: [number, number, number]     = [255, 255, 255];
+      const SUCCESS: [number, number, number]   = [16, 185, 129];
 
       const stripHtml = (html: string) => {
         const div = document.createElement('div');
@@ -86,60 +96,156 @@ export default function TutorialViewPage() {
         return (div.textContent || div.innerText || '').trim();
       };
 
-      // Usa o lineHeight real do jsPDF para o fontSize atual
       const getRealLineH = () => doc.getLineHeight() / doc.internal.scaleFactor;
 
       const checkBreak = (neededMm: number) => {
         if (y + neededMm > bottomBoundary) { doc.addPage(); y = margin; }
       };
 
-      // Renderiza linha por linha para nunca ultrapassar a página
       const addText = (
         text: string,
         fontSize: number,
         bold = false,
-        color: [number, number, number] = [30, 30, 30],
-        extraSpacingAfter = 2
+        color: [number, number, number] = BODY,
+        spacingAfter = 2,
+        xOffset = 0
       ) => {
         if (!text.trim()) return;
         doc.setFontSize(fontSize);
         doc.setFont('helvetica', bold ? 'bold' : 'normal');
         doc.setTextColor(...color);
         const lineH = getRealLineH();
-        const lines = doc.splitTextToSize(text, contentWidth) as string[];
+        const maxW = contentWidth - xOffset;
+        const lines = doc.splitTextToSize(text, maxW) as string[];
         for (const line of lines) {
           if (y + lineH > bottomBoundary) { doc.addPage(); y = margin; }
-          doc.text(line, margin, y);
+          doc.text(line, margin + xOffset, y);
           y += lineH;
         }
-        y += extraSpacingAfter;
+        y += spacingAfter;
       };
 
-      const addSeparator = (light = false) => {
-        checkBreak(8);
-        doc.setDrawColor(...(light ? ([210, 210, 210] as [number, number, number]) : ([180, 180, 180] as [number, number, number])));
-        doc.setLineWidth(light ? 0.3 : 0.5);
+      const addSeparator = (color: [number, number, number] = BORDER, weight = 0.3) => {
+        checkBreak(6);
+        doc.setDrawColor(...color);
+        doc.setLineWidth(weight);
         doc.line(margin, y, pageWidth - margin, y);
-        y += 6;
+        y += 5;
       };
 
-      // ── Cabeçalho ────────────────────────────────────────────────────────
-      doc.setFillColor(37, 99, 235);
-      doc.rect(margin, y, contentWidth, 1.2, 'F');
-      y += 6;
+      // ── CABEÇALHO ────────────────────────────────────────────────────────
+      // Faixa superior azul (header block)
+      const headerH = 42;
+      doc.setFillColor(...PRIMARY);
+      doc.rect(0, 0, pageWidth, headerH, 'F');
 
-      addText(tutorial.title, 20, true, [17, 24, 39], 3);
-      if (tutorial.description) addText(tutorial.description, 11, false, [75, 85, 99], 3);
+      // Linha decorativa inferior do header
+      doc.setFillColor(255, 255, 255, 0.15);
+      doc.rect(0, headerH - 1.5, pageWidth, 1.5, 'F');
 
+      y = 10;
+
+      // Título
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...WHITE);
+      const titleLines = doc.splitTextToSize(tutorial.title, contentWidth - 20) as string[];
+      for (const line of titleLines) {
+        doc.text(line, margin, y);
+        y += doc.getLineHeight() / doc.internal.scaleFactor;
+      }
+
+      // Descrição
+      if (tutorial.description) {
+        y += 1;
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(186, 210, 254); // blue-200
+        const descLines = doc.splitTextToSize(tutorial.description, contentWidth - 10) as string[];
+        const maxDescLines = descLines.slice(0, 2);
+        for (const line of maxDescLines) {
+          if (y < headerH - 5) {
+            doc.text(line, margin, y);
+            y += doc.getLineHeight() / doc.internal.scaleFactor;
+          }
+        }
+      }
+
+      y = headerH + 8;
+
+      // ── METADATA STRIP ───────────────────────────────────────────────────
+      // Caixa cinza clara com metadados
+      const metaH = 22;
+      doc.setFillColor(248, 250, 252);
+      doc.setDrawColor(...BORDER);
+      doc.setLineWidth(0.3);
+      doc.roundedRect(margin, y, contentWidth, metaH, 3, 3, 'FD');
+
+      const metaY = y + 5;
+
+      // Setor
+      const col = contentWidth / 4;
       const metaItems = [
-        `Setor: ${tutorial.sector_detail.name}`,
-        ...(tutorial.tags_detail.length > 0 ? [`Tags: ${tutorial.tags_detail.map((t) => t.name).join(', ')}`] : []),
-        `Criado por: ${tutorial.created_by_name}`,
+        { label: 'Setor', value: tutorial.sector_detail.name },
+        { label: 'Autor', value: tutorial.created_by_name || '—' },
+        { label: 'Passos', value: `${tutorial.steps.length} passo${tutorial.steps.length !== 1 ? 's' : ''}` },
+        { label: 'Status', value: tutorial.is_active ? 'Ativo' : 'Inativo' },
       ];
-      addText(metaItems.join('   •   '), 9, false, [107, 114, 128], 4);
-      addSeparator();
 
-      // Carrega imagem como dataURL para embed no PDF
+      metaItems.forEach((item, i) => {
+        const x = margin + 4 + i * col;
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...MUTED);
+        doc.text(item.label.toUpperCase(), x, metaY);
+
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...DARK);
+        doc.text(item.value, x, metaY + 5);
+
+        // Status: colorido
+        if (item.label === 'Status') {
+          doc.setTextColor(...(tutorial.is_active ? SUCCESS : MUTED));
+          doc.text(item.value, x, metaY + 5);
+        }
+      });
+
+      // Data de criação à direita
+      const createdDate = new Date(tutorial.created_at).toLocaleDateString('pt-BR', {
+        day: '2-digit', month: 'long', year: 'numeric',
+      });
+      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...MUTED);
+      doc.text(`Criado em ${createdDate}`, pageWidth - margin - 4, metaY + 12, { align: 'right' });
+
+      y += metaH + 10;
+
+      // Tags (se existirem)
+      if (tutorial.tags_detail.length > 0) {
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...MUTED);
+        doc.text('TAGS:', margin, y);
+        let tagX = margin + 13;
+        for (const tag of tutorial.tags_detail) {
+          const tagW = doc.getTextWidth(tag.name) + 6;
+          if (tagX + tagW > pageWidth - margin) break;
+          doc.setFillColor(PRIMARY_LIGHT[0], PRIMARY_LIGHT[1], PRIMARY_LIGHT[2]);
+          doc.roundedRect(tagX, y - 3.5, tagW, 5.5, 1.5, 1.5, 'F');
+          doc.setFontSize(7.5);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(...PRIMARY);
+          doc.text(tag.name, tagX + 3, y);
+          tagX += tagW + 3;
+        }
+        y += 8;
+      }
+
+      addSeparator(BORDER, 0.4);
+
+      // ── CARREGA IMAGEM ───────────────────────────────────────────────────
       const loadImage = async (url: string): Promise<{ dataUrl: string; w: number; h: number } | null> => {
         try {
           const res = await fetch(url);
@@ -161,67 +267,118 @@ export default function TutorialViewPage() {
       const addImageToPdf = async (url: string, caption?: string) => {
         const result = await loadImage(url);
         if (!result) {
-          addText(caption ? `[Imagem: ${caption}]` : '[Imagem]', 9, false, [107, 114, 128], 3);
+          addText(caption ? `[Imagem: ${caption}]` : '[Imagem]', 8, false, MUTED, 3);
           return;
         }
         const { dataUrl, w, h } = result;
-        const maxW = contentWidth;
-        const maxH = 90;
+        const maxW = contentWidth - 8;
+        const maxH = 85;
         const aspect = w / h;
         let imgW = maxW;
         let imgH = imgW / aspect;
         if (imgH > maxH) { imgH = maxH; imgW = imgH * aspect; }
         const imgX = margin + (contentWidth - imgW) / 2;
-        checkBreak(imgH + 8);
+        checkBreak(imgH + 12);
+        // Borda ao redor da imagem
+        doc.setDrawColor(...BORDER);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(imgX - 1, y - 1, imgW + 2, imgH + 2, 2, 2, 'S');
         doc.addImage(dataUrl, 'JPEG', imgX, y, imgW, imgH);
-        y += imgH + 3;
-        if (caption) addText(caption, 9, false, [107, 114, 128], 4);
-        else y += 2;
+        y += imgH + 4;
+        if (caption) {
+          doc.setFontSize(8);
+          doc.setFont('helvetica', 'italic');
+          doc.setTextColor(...MUTED);
+          doc.text(caption, pageWidth / 2, y, { align: 'center' });
+          y += 5;
+        }
+        y += 3;
       };
 
-      // ── Passos ───────────────────────────────────────────────────────────
+      // ── PASSOS ───────────────────────────────────────────────────────────
       for (let index = 0; index < tutorial.steps.length; index++) {
         const step = tutorial.steps[index];
 
-        // Badge do passo — garante espaço para o badge + pelo menos uma linha de título
-        checkBreak(24);
-        doc.setFillColor(239, 246, 255);
-        doc.setDrawColor(191, 219, 254);
-        doc.roundedRect(margin, y, contentWidth, 8, 2, 2, 'FD');
-        doc.setFontSize(10);
+        checkBreak(28);
+
+        // Círculo numerado + label do passo
+        const circleX = margin + 4;
+        const circleY = y + 4;
+        doc.setFillColor(...PRIMARY);
+        doc.circle(circleX, circleY, 4, 'F');
+        doc.setFontSize(8);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(37, 99, 235);
-        doc.text(`Passo ${index + 1} de ${tutorial.steps.length}`, margin + 3, y + 5.5);
-        y += 13;
+        doc.setTextColor(...WHITE);
+        const numStr = String(index + 1);
+        const numW = doc.getTextWidth(numStr);
+        doc.text(numStr, circleX - numW / 2, circleY + 2.5);
+
+        // Label "Passo X de Y" ao lado
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...PRIMARY);
+        doc.text(`Passo ${index + 1} de ${tutorial.steps.length}`, margin + 12, y + 5.5);
+
+        y += 12;
 
         // Título do passo
-        addText(step.title, 14, true, [17, 24, 39], 3);
+        addText(step.title, 13, true, DARK, 3, 0);
 
-        // Conteúdo
+        // Linha azul lateral decorativa + conteúdo
         const content = stripHtml(step.content);
-        if (content) addText(content, 11, false, [55, 65, 81], 3);
+        if (content) {
+          // Barra lateral colorida
+          const contentStartY = y;
+          addText(content, 10, false, BODY, 3, 5);
+          const contentEndY = y;
+          doc.setFillColor(...PRIMARY_LIGHT);
+          doc.rect(margin, contentStartY - 2, 2.5, contentEndY - contentStartY + 2, 'F');
+        }
 
         // Mídia
         for (const media of step.media) {
           if (media.media_type === 'image' && media.file_url) {
             await addImageToPdf(media.file_url, media.caption || undefined);
           } else if (media.media_type === 'video_embed' && media.embed_url) {
-            const label = media.caption ? `[ Video: ${media.caption} ]` : '[ Video incorporado ]';
-            addText(label, 9, false, [107, 114, 128], 3);
+            checkBreak(12);
+            doc.setFillColor(254, 242, 242);
+            doc.setDrawColor(252, 165, 165);
+            doc.setLineWidth(0.3);
+            doc.roundedRect(margin, y, contentWidth, 10, 2, 2, 'FD');
+            doc.setFontSize(8.5);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(185, 28, 28);
+            const videoLabel = media.caption ? `▶  Vídeo: ${media.caption}` : '▶  Vídeo incorporado';
+            doc.text(videoLabel, margin + 4, y + 6.5);
+            y += 14;
           }
         }
 
-        if (index < tutorial.steps.length - 1) { y += 4; addSeparator(true); }
+        if (index < tutorial.steps.length - 1) {
+          y += 3;
+          addSeparator([226, 232, 240], 0.25);
+        }
       }
 
-      // ── Rodapé em todas as páginas ────────────────────────────────────────
+      // ── RODAPÉ EM TODAS AS PÁGINAS ────────────────────────────────────────
       const totalPages = (doc.internal as any).getNumberOfPages();
       for (let p = 1; p <= totalPages; p++) {
         doc.setPage(p);
-        doc.setFontSize(8);
+
+        // Linha rodapé
+        doc.setDrawColor(...BORDER);
+        doc.setLineWidth(0.3);
+        doc.line(margin, pageHeight - 12, pageWidth - margin, pageHeight - 12);
+
+        // Texto esquerdo — título
+        doc.setFontSize(7.5);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(156, 163, 175);
-        doc.text(`${tutorial.title} — Página ${p} de ${totalPages}`, pageWidth / 2, pageHeight - 8, { align: 'center' });
+        doc.setTextColor(...MUTED);
+        const shortTitle = tutorial.title.length > 50 ? tutorial.title.slice(0, 48) + '…' : tutorial.title;
+        doc.text(shortTitle, margin, pageHeight - 7.5);
+
+        // Texto direito — página
+        doc.text(`${p} / ${totalPages}`, pageWidth - margin, pageHeight - 7.5, { align: 'right' });
       }
 
       doc.save(`tutorial_${tutorial.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`);
