@@ -342,16 +342,21 @@ export default function ExamPage() {
     return (
       <>
         <div className="-mx-4 -my-6 md:-mx-6 h-[calc(100vh-3.5rem)] flex flex-col overflow-hidden">
+
+          {/* Top nav bar */}
+          <div className="shrink-0 border-b bg-card/80 backdrop-blur px-4 md:px-6 py-3">
+            <Button
+              variant="ghost"
+              onClick={handleExit}
+              className="h-9 gap-2 text-muted-foreground hover:text-foreground -ml-2"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Voltar ao Curso
+            </Button>
+          </div>
+
           <div className="flex-1 overflow-y-auto flex items-center justify-center px-4 py-10">
             <div className="w-full max-w-4xl animate-in fade-in slide-in-from-bottom-4 duration-400">
-              <button
-                onClick={handleExit}
-                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-                Voltar ao Curso
-              </button>
-
               <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8 items-center">
                 {/* Info card */}
                 <div className="rounded-3xl border bg-card overflow-hidden shadow-sm">
@@ -657,56 +662,57 @@ export default function ExamPage() {
         </div>
 
         {/* Footer — navegação + enviar */}
-        <div className="shrink-0 border-t bg-card/95 backdrop-blur px-4 md:px-6 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
-          <div className="flex items-center gap-3">
+        <div className="shrink-0 border-t bg-card/95 backdrop-blur px-4 md:px-6 py-4 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+          <div className="max-w-2xl mx-auto flex items-center gap-4">
+
             {/* Anterior */}
             <Button
               variant="outline"
-              size="sm"
               onClick={() => goToQuestion(currentQuestionIndex - 1)}
               disabled={currentQuestionIndex === 0}
-              className="h-8 text-xs px-3"
+              className="h-11 px-5 gap-2 shrink-0"
             >
-              <ChevronLeft className="h-3.5 w-3.5 mr-1" />
+              <ChevronLeft className="h-4 w-4" />
               Anterior
             </Button>
 
-            {/* Centro: status */}
-            <div className="flex-1 text-center text-xs">
-              {answeredCount < questions.length ? (
-                <span className="text-amber-600 dark:text-amber-400">
-                  {questions.length - answeredCount} questão(ões) sem resposta
-                </span>
-              ) : (
-                <span className="text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  Todas respondidas
-                </span>
-              )}
+            {/* Centro: indicador de progresso */}
+            <div className="flex-1 flex flex-col items-center gap-0.5">
+              <span className="text-sm font-bold tabular-nums text-foreground">
+                {currentQuestionIndex + 1} / {questions.length}
+              </span>
+              <span className={cn(
+                'text-xs',
+                answeredCount < questions.length
+                  ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-emerald-600 dark:text-emerald-400',
+              )}>
+                {answeredCount < questions.length
+                  ? `${questions.length - answeredCount} sem resposta`
+                  : '✓ Todas respondidas'
+                }
+              </span>
             </div>
 
             {/* Próxima ou Enviar */}
             {currentQuestionIndex < questions.length - 1 ? (
               <Button
-                variant="outline"
-                size="sm"
                 onClick={() => goToQuestion(currentQuestionIndex + 1)}
-                className="h-8 text-xs px-3"
+                className="h-11 px-6 gap-2 shrink-0 bg-gradient-to-r from-primary to-purple-500 hover:opacity-90 text-white border-0 shadow-md shadow-primary/20"
               >
                 Próxima
-                <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
             ) : (
               <Button
                 onClick={() => handleSubmit()}
                 disabled={isSubmitting || answeredCount < questions.length}
-                className="bg-gradient-to-r from-primary to-purple-500 hover:opacity-90 text-white border-0 shadow-md shadow-primary/20 disabled:opacity-50 h-8 text-xs px-4"
-                size="sm"
+                className="h-11 px-6 gap-2 shrink-0 bg-gradient-to-r from-primary to-purple-500 hover:opacity-90 text-white border-0 shadow-md shadow-primary/20 disabled:opacity-50"
               >
                 {isSubmitting ? (
-                  <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Enviando...</>
+                  <><Loader2 className="h-4 w-4 animate-spin" />Enviando...</>
                 ) : (
-                  <><Send className="h-3.5 w-3.5 mr-1.5" />Enviar Prova ({answeredCount}/{questions.length})</>
+                  <><Send className="h-4 w-4" />Enviar Prova</>
                 )}
               </Button>
             )}
