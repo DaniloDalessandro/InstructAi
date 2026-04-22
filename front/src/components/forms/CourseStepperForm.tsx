@@ -27,9 +27,10 @@ import { TagMultiSelect } from '@/components/manual/TagMultiSelect';
 import type { Sector } from '@/types/sector.types';
 import type { Tag } from '@/types/tag.types';
 import type { Course, CourseFormData } from '@/types/course.types';
-import { Loader2, Plus, Trash2, Check, ArrowLeft, ArrowRight, Edit2, X } from 'lucide-react';
+import { Loader2, Plus, Trash2, Check, ArrowLeft, ArrowRight, Edit2, X, Lock, CheckCircle2 } from 'lucide-react';
 import { createCourse, createLesson, createQuestion } from '@/lib/api/courses';
 import { toast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 import {
   RadioGroup,
   RadioGroupItem,
@@ -78,6 +79,7 @@ export default function CourseStepperForm({
 
   // Estado para gerenciamento de questões (Step 3)
   const [editingQuestionIndex, setEditingQuestionIndex] = useState<number | null>(null);
+  const [optionCount, setOptionCount] = useState<3 | 4>(4);
   const [currentQuestion, setCurrentQuestion] = useState<QuestionInput>({
     text: '',
     option_a: '',
@@ -130,6 +132,7 @@ export default function CourseStepperForm({
       });
       setLessons([]);
       setQuestions([]);
+      setOptionCount(4);
       setEditingLessonIndex(null);
       setCurrentLesson({ name: '', youtube_url: '' });
       setEditingQuestionIndex(null);
@@ -241,11 +244,11 @@ export default function CourseStepperForm({
 
   // Funções de gerenciamento de questões (Step 3)
   const handleAddQuestion = () => {
-    if (!currentQuestion.text.trim() ||
-        !currentQuestion.option_a.trim() ||
-        !currentQuestion.option_b.trim() ||
-        !currentQuestion.option_c.trim() ||
-        !currentQuestion.option_d.trim()) {
+    const requiredOptions = optionCount === 3
+      ? [currentQuestion.option_a, currentQuestion.option_b, currentQuestion.option_c]
+      : [currentQuestion.option_a, currentQuestion.option_b, currentQuestion.option_c, currentQuestion.option_d];
+
+    if (!currentQuestion.text.trim() || requiredOptions.some((o) => !o.trim())) {
       toast({
         title: 'Campos obrigatórios',
         description: 'Preencha o enunciado e todas as alternativas',
@@ -253,19 +256,20 @@ export default function CourseStepperForm({
       });
       return;
     }
-    setQuestions([...questions, currentQuestion]);
-    setCurrentQuestion({
-      text: '',
-      option_a: '',
-      option_b: '',
-      option_c: '',
-      option_d: '',
-      correct_option: 'A',
-    });
-    toast({
-      title: 'Sucesso',
-      description: 'Questão adicionada com sucesso',
-    });
+
+    const safeCorrect = (optionCount === 3 && currentQuestion.correct_option === 'D')
+      ? 'C' as const
+      : currentQuestion.correct_option;
+
+    const questionToAdd: QuestionInput = {
+      ...currentQuestion,
+      correct_option: safeCorrect,
+      option_d: optionCount === 3 ? '' : currentQuestion.option_d,
+    };
+
+    setQuestions([...questions, questionToAdd]);
+    setCurrentQuestion({ text: '', option_a: '', option_b: '', option_c: '', option_d: '', correct_option: 'A' });
+    toast({ title: 'Questão adicionada!' });
   };
 
   const handleEditQuestion = (index: number) => {
@@ -274,11 +278,11 @@ export default function CourseStepperForm({
   };
 
   const handleUpdateQuestion = () => {
-    if (!currentQuestion.text.trim() ||
-        !currentQuestion.option_a.trim() ||
-        !currentQuestion.option_b.trim() ||
-        !currentQuestion.option_c.trim() ||
-        !currentQuestion.option_d.trim()) {
+    const requiredOptions = optionCount === 3
+      ? [currentQuestion.option_a, currentQuestion.option_b, currentQuestion.option_c]
+      : [currentQuestion.option_a, currentQuestion.option_b, currentQuestion.option_c, currentQuestion.option_d];
+
+    if (!currentQuestion.text.trim() || requiredOptions.some((o) => !o.trim())) {
       toast({
         title: 'Campos obrigatórios',
         description: 'Preencha o enunciado e todas as alternativas',
@@ -286,22 +290,16 @@ export default function CourseStepperForm({
       });
       return;
     }
+
     const updatedQuestions = [...questions];
-    updatedQuestions[editingQuestionIndex!] = currentQuestion;
+    updatedQuestions[editingQuestionIndex!] = {
+      ...currentQuestion,
+      option_d: optionCount === 3 ? '' : currentQuestion.option_d,
+    };
     setQuestions(updatedQuestions);
     setEditingQuestionIndex(null);
-    setCurrentQuestion({
-      text: '',
-      option_a: '',
-      option_b: '',
-      option_c: '',
-      option_d: '',
-      correct_option: 'A',
-    });
-    toast({
-      title: 'Sucesso',
-      description: 'Questão atualizada com sucesso',
-    });
+    setCurrentQuestion({ text: '', option_a: '', option_b: '', option_c: '', option_d: '', correct_option: 'A' });
+    toast({ title: 'Questão atualizada!' });
   };
 
   const handleCancelEditQuestion = () => {
@@ -1091,23 +1089,20 @@ export default function CourseStepperForm({
   };
 
   const renderStep3 = () => {
-    const getOptionLabel = (option: 'A' | 'B' | 'C' | 'D') => {
-      switch (option) {
-        case 'A': return currentQuestion.option_a;
-        case 'B': return currentQuestion.option_b;
-        case 'C': return currentQuestion.option_c;
-        case 'D': return currentQuestion.option_d;
-      }
+    const activeOptions = (['A', 'B', 'C', 'D'] as const).slice(0, optionCount);
+    const fieldMap: Record<string, keyof QuestionInput> = {
+      A: 'option_a', B: 'option_b', C: 'option_c', D: 'option_d',
     };
 
     return (
-      <div className="py-6">
-        {/* Layout de 2 Colunas */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          {/* COLUNA ESQUERDA (40%) - Formulário + Preview */}
-          <div className="lg:col-span-2 space-y-6">
+      <div className="flex-1 min-h-0 py-4 overflow-hidden flex flex-col">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 flex-1 min-h-0 overflow-hidden">
+
+          {/* COLUNA ESQUERDA — Formulário fixo */}
+          <div className="lg:col-span-2 flex flex-col min-h-0 overflow-hidden">
+
             {/* Header */}
-            <div>
+            <div className="flex-shrink-0 mb-4">
               <h3 className="text-lg font-medium">
                 {editingQuestionIndex !== null ? 'Editar Questão' : 'Nova Questão'}
               </h3>
@@ -1118,273 +1113,269 @@ export default function CourseStepperForm({
               </p>
             </div>
 
-            {/* Formulário */}
-            <div className="space-y-4">
+            {/* Formulário scrollável dentro da coluna */}
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
+
+              {/* Seletor de quantidade de opções */}
+              <div className={cn(
+                'flex items-center gap-3 px-3 py-2.5 rounded-xl border text-sm',
+                questions.length > 0 ? 'bg-muted/30 text-muted-foreground' : 'bg-card',
+              )}>
+                {questions.length > 0 ? (
+                  <>
+                    <Lock className="w-3.5 h-3.5 shrink-0" />
+                    <span className="text-xs">Todas as questões têm <strong className="text-foreground">{optionCount} opções</strong></span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xs text-muted-foreground shrink-0">Opções por questão:</span>
+                    <div className="flex gap-1.5">
+                      {([3, 4] as const).map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => {
+                            setOptionCount(n);
+                            if (n === 3 && currentQuestion.correct_option === 'D') {
+                              setCurrentQuestion({ ...currentQuestion, correct_option: 'C' });
+                            }
+                          }}
+                          className={cn(
+                            'w-8 h-8 rounded-lg text-xs font-bold border transition-all',
+                            optionCount === n
+                              ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                              : 'bg-card hover:bg-muted border-border text-muted-foreground',
+                          )}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                    <span className="text-xs text-muted-foreground">Fixado na 1ª questão</span>
+                  </>
+                )}
+              </div>
+
+              {/* Enunciado */}
               <div className="grid gap-2">
-                <Label htmlFor="current-question-text">Enunciado da Questão *</Label>
+                <Label htmlFor="current-question-text">Enunciado *</Label>
                 <Textarea
                   id="current-question-text"
                   value={currentQuestion.text}
-                  onChange={(e) =>
-                    setCurrentQuestion({ ...currentQuestion, text: e.target.value })
-                  }
+                  onChange={(e) => setCurrentQuestion({ ...currentQuestion, text: e.target.value })}
                   placeholder="Digite o enunciado da questão..."
-                  rows={4}
+                  rows={3}
+                  className="resize-none"
                 />
               </div>
 
-              <div className="grid gap-3">
-                <Label>Alternativas *</Label>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="current-option-a" className="text-sm">Opção A</Label>
-                  <Input
-                    id="current-option-a"
-                    type="text"
-                    value={currentQuestion.option_a}
-                    onChange={(e) =>
-                      setCurrentQuestion({ ...currentQuestion, option_a: e.target.value })
-                    }
-                    placeholder="Digite a opção A"
-                  />
-                </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="current-option-b" className="text-sm">Opção B</Label>
-                  <Input
-                    id="current-option-b"
-                    type="text"
-                    value={currentQuestion.option_b}
-                    onChange={(e) =>
-                      setCurrentQuestion({ ...currentQuestion, option_b: e.target.value })
-                    }
-                    placeholder="Digite a opção B"
-                  />
-                </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="current-option-c" className="text-sm">Opção C</Label>
-                  <Input
-                    id="current-option-c"
-                    type="text"
-                    value={currentQuestion.option_c}
-                    onChange={(e) =>
-                      setCurrentQuestion({ ...currentQuestion, option_c: e.target.value })
-                    }
-                    placeholder="Digite a opção C"
-                  />
-                </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="current-option-d" className="text-sm">Opção D</Label>
-                  <Input
-                    id="current-option-d"
-                    type="text"
-                    value={currentQuestion.option_d}
-                    onChange={(e) =>
-                      setCurrentQuestion({ ...currentQuestion, option_d: e.target.value })
-                    }
-                    placeholder="Digite a opção D"
-                  />
-                </div>
-              </div>
-
+              {/* Alternativas com flag de resposta correta inline */}
               <div className="grid gap-2">
-                <Label>Resposta Correta *</Label>
-                <RadioGroup
-                  value={currentQuestion.correct_option}
-                  onValueChange={(value) =>
-                    setCurrentQuestion({ ...currentQuestion, correct_option: value as 'A' | 'B' | 'C' | 'D' })
-                  }
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="A" id="current-correct-a" />
-                    <Label htmlFor="current-correct-a">A</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="B" id="current-correct-b" />
-                    <Label htmlFor="current-correct-b">B</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="C" id="current-correct-c" />
-                    <Label htmlFor="current-correct-c">C</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="D" id="current-correct-d" />
-                    <Label htmlFor="current-correct-d">D</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-            </div>
-
-            {/* Preview da Questão */}
-            {currentQuestion.text && (
-              <div className="space-y-2">
-                <Label>Preview</Label>
-                <div className="p-4 border rounded-lg bg-muted/30">
-                  <p className="font-medium text-sm mb-3">{currentQuestion.text}</p>
-                  <div className="space-y-2">
-                    {(['A', 'B', 'C', 'D'] as const).map((option) => {
-                      const optionText = getOptionLabel(option);
-                      const isCorrect = currentQuestion.correct_option === option;
-
-                      return (
-                        <div
-                          key={option}
-                          className={`flex items-start gap-2 p-2 rounded ${
-                            isCorrect ? 'bg-green-100 dark:bg-green-900/30' : ''
-                          }`}
-                        >
-                          <span className="font-medium text-xs">{option})</span>
-                          <span className="text-xs flex-1">
-                            {optionText || `Opção ${option} não preenchida`}
-                          </span>
-                          {isCorrect && (
-                            <span className="text-xs font-medium text-green-600 dark:text-green-400 bg-green-200 dark:bg-green-900/50 px-2 py-0.5 rounded">
-                              Correta
-                            </span>
+                <div className="flex items-center justify-between">
+                  <Label>Alternativas *</Label>
+                  <span className="text-[11px] text-muted-foreground">Clique no círculo para marcar a correta</span>
+                </div>
+                <div className="space-y-2">
+                  {activeOptions.map((option) => {
+                    const field = fieldMap[option] as 'option_a' | 'option_b' | 'option_c' | 'option_d';
+                    const isCorrect = currentQuestion.correct_option === option;
+                    return (
+                      <div
+                        key={option}
+                        className={cn(
+                          'flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all duration-150',
+                          isCorrect
+                            ? 'border-emerald-400 bg-emerald-50/60 dark:bg-emerald-950/20'
+                            : 'border-border bg-card hover:border-muted-foreground/30',
+                        )}
+                      >
+                        {/* Botão de seleção correta */}
+                        <button
+                          type="button"
+                          onClick={() => setCurrentQuestion({ ...currentQuestion, correct_option: option })}
+                          title={isCorrect ? 'Resposta correta' : 'Marcar como correta'}
+                          className={cn(
+                            'w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all',
+                            isCorrect
+                              ? 'border-emerald-500 bg-emerald-500'
+                              : 'border-muted-foreground/40 hover:border-emerald-400',
                           )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                        >
+                          {isCorrect && <Check className="w-3 h-3 text-white" />}
+                        </button>
+
+                        {/* Badge da letra */}
+                        <span className={cn(
+                          'w-6 h-6 rounded-md grid place-items-center text-[11px] font-bold shrink-0',
+                          isCorrect ? 'bg-emerald-500 text-white' : 'bg-muted text-muted-foreground',
+                        )}>
+                          {option}
+                        </span>
+
+                        {/* Input */}
+                        <Input
+                          value={currentQuestion[field]}
+                          onChange={(e) => setCurrentQuestion({ ...currentQuestion, [field]: e.target.value })}
+                          placeholder={`Opção ${option}`}
+                          className={cn(
+                            'flex-1 h-8 text-sm border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 px-1',
+                          )}
+                        />
+
+                        {/* Label "Correta" */}
+                        {isCorrect && (
+                          <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 shrink-0 bg-emerald-100 dark:bg-emerald-900/40 px-1.5 py-0.5 rounded-md">
+                            ✓ Correta
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-            )}
 
-            {/* Botões de Ação */}
-            <div className="flex gap-2">
-              {editingQuestionIndex !== null ? (
-                <>
-                  <Button
-                    type="button"
-                    onClick={handleUpdateQuestion}
-                    className="flex-1"
-                  >
-                    <Check className="h-4 w-4 mr-2" />
-                    Atualizar Questão
+              {/* Botões de ação */}
+              <div className="flex gap-2 pt-1">
+                {editingQuestionIndex !== null ? (
+                  <>
+                    <Button type="button" onClick={handleUpdateQuestion} className="flex-1">
+                      <Check className="h-4 w-4 mr-2" />
+                      Atualizar
+                    </Button>
+                    <Button type="button" variant="outline" onClick={handleCancelEditQuestion}>
+                      <X className="h-4 w-4 mr-2" />
+                      Cancelar
+                    </Button>
+                  </>
+                ) : (
+                  <Button type="button" onClick={handleAddQuestion} className="w-full">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Adicionar Questão
                   </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleCancelEditQuestion}
-                  >
-                    <X className="h-4 w-4 mr-2" />
-                    Cancelar
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  type="button"
-                  onClick={handleAddQuestion}
-                  className="w-full"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Adicionar Questão
-                </Button>
-              )}
+                )}
+              </div>
             </div>
           </div>
 
-          {/* COLUNA DIREITA (60%) - Lista de Questões */}
-          <div className="lg:col-span-3 space-y-4">
-            {/* Header da Lista */}
-            <div className="flex items-center justify-between">
+          {/* COLUNA DIREITA — Lista com scroll */}
+          <div className="lg:col-span-3 flex flex-col min-h-0 overflow-hidden">
+
+            {/* Header fixo */}
+            <div className="flex-shrink-0 flex items-center justify-between mb-4">
               <div>
-                <h3 className="text-lg font-medium">
-                  Questões Cadastradas ({questions.length})
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Gerencie as questões da prova
-                </p>
+                <h3 className="text-lg font-medium">Questões ({questions.length})</h3>
+                <p className="text-sm text-muted-foreground">Gerencie as questões da prova</p>
               </div>
+              {questions.length > 0 && (
+                <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
+                  {questions.length} questão{questions.length !== 1 ? 'ões' : ''}
+                </span>
+              )}
             </div>
 
-            {/* Lista de Questões */}
-            {questions.length === 0 ? (
-              <div className="text-center py-16 border-2 border-dashed rounded-lg bg-muted/30">
-                <div className="flex flex-col items-center gap-3">
-                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Plus className="h-8 w-8 text-primary/60" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground mb-1">
-                      Nenhuma questão cadastrada
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Adicione a primeira questão usando o formulário ao lado
+            {/* Lista scrollável */}
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+              {questions.length === 0 ? (
+                <div className="h-full flex items-center justify-center border-2 border-dashed rounded-2xl bg-muted/20">
+                  <div className="flex flex-col items-center gap-3 py-12 px-6 text-center">
+                    <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Plus className="h-7 w-7 text-primary/60" />
+                    </div>
+                    <p className="text-sm font-medium">Nenhuma questão ainda</p>
+                    <p className="text-xs text-muted-foreground max-w-[200px]">
+                      Preencha o formulário ao lado e clique em "Adicionar Questão"
                     </p>
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
-                {questions.map((question, index) => {
-                  const isEditing = editingQuestionIndex === index;
+              ) : (
+                <div className="space-y-3">
+                  {questions.map((question, index) => {
+                    const isEditing = editingQuestionIndex === index;
+                    const opts = (['A', 'B', 'C', 'D'] as const).slice(0, optionCount);
+                    const optValues: Record<string, string> = {
+                      A: question.option_a,
+                      B: question.option_b,
+                      C: question.option_c,
+                      D: question.option_d,
+                    };
 
-                  return (
-                    <div
-                      key={index}
-                      className={`p-4 border rounded-lg bg-card hover:bg-accent/30 transition-all ${
-                        isEditing ? 'ring-2 ring-primary shadow-md' : ''
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        {/* Conteúdo da Questão */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-2">
-                            <p className="text-xs font-medium text-primary">
-                              Questão {index + 1}
-                            </p>
-                            <span className="text-xs font-medium text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded">
-                              Resposta: {question.correct_option}
+                    return (
+                      <div
+                        key={index}
+                        className={cn(
+                          'rounded-2xl border bg-card transition-all duration-150',
+                          isEditing
+                            ? 'ring-2 ring-primary border-primary/40 shadow-md shadow-primary/5'
+                            : 'hover:border-muted-foreground/30 hover:shadow-sm',
+                        )}
+                      >
+                        <div className="px-4 py-3 flex items-start justify-between gap-3 border-b bg-muted/20 rounded-t-2xl">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="w-7 h-7 rounded-lg bg-primary/10 text-primary text-xs font-bold grid place-items-center shrink-0">
+                              {index + 1}
                             </span>
+                            <p className="text-sm font-medium line-clamp-2 leading-snug">
+                              {question.text || 'Sem enunciado'}
+                            </p>
                           </div>
-                          <p className="text-sm font-medium line-clamp-2 mb-3">
-                            {question.text || 'Sem enunciado'}
-                          </p>
-                          <div className="space-y-1">
-                            <p className="text-xs text-muted-foreground line-clamp-1">
-                              <span className="font-medium">A)</span> {question.option_a || 'Não preenchida'}
-                            </p>
-                            <p className="text-xs text-muted-foreground line-clamp-1">
-                              <span className="font-medium">B)</span> {question.option_b || 'Não preenchida'}
-                            </p>
-                            <p className="text-xs text-muted-foreground line-clamp-1">
-                              <span className="font-medium">C)</span> {question.option_c || 'Não preenchida'}
-                            </p>
-                            <p className="text-xs text-muted-foreground line-clamp-1">
-                              <span className="font-medium">D)</span> {question.option_d || 'Não preenchida'}
-                            </p>
+                          <div className="flex gap-1.5 shrink-0">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditQuestion(index)}
+                              disabled={isEditing}
+                              className="h-7 w-7 p-0"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteQuestion(index)}
+                              className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
                         </div>
 
-                        {/* Botões de Ação */}
-                        <div className="flex flex-col gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEditQuestion(index)}
-                            disabled={isEditing}
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDeleteQuestion(index)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                        <div className="px-4 py-3 space-y-1.5">
+                          {opts.map((opt) => {
+                            const isCorrect = question.correct_option === opt;
+                            return (
+                              <div
+                                key={opt}
+                                className={cn(
+                                  'flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs transition-all',
+                                  isCorrect
+                                    ? 'bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800'
+                                    : 'text-muted-foreground',
+                                )}
+                              >
+                                <span className={cn(
+                                  'w-5 h-5 rounded-md grid place-items-center font-bold shrink-0',
+                                  isCorrect ? 'bg-emerald-500 text-white' : 'bg-muted text-muted-foreground',
+                                )}>
+                                  {opt}
+                                </span>
+                                <span className={cn('flex-1 truncate', isCorrect && 'font-medium text-emerald-700 dark:text-emerald-400')}>
+                                  {optValues[opt] || '—'}
+                                </span>
+                                {isCorrect && (
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -1393,7 +1384,7 @@ export default function CourseStepperForm({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[1000px] max-w-[95vw] max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="sm:max-w-[1140px] max-w-[95vw] max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold text-primary">
             Novo Curso
@@ -1412,7 +1403,7 @@ export default function CourseStepperForm({
           <>
             {renderStepIndicator()}
 
-            <div className={`flex-1 min-h-0 ${currentStep === 2 ? 'overflow-hidden flex flex-col' : 'overflow-y-auto'}`}>
+            <div className={`flex-1 min-h-0 ${currentStep === 2 || currentStep === 3 ? 'overflow-hidden flex flex-col' : 'overflow-y-auto'}`}>
               {currentStep === 1 && renderStep1()}
               {currentStep === 2 && renderStep2()}
               {currentStep === 3 && renderStep3()}
