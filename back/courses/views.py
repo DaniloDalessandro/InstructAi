@@ -106,7 +106,7 @@ class CourseViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        answers = request.data.get('answers', {})  # {question_id: selected_option}
+        answers = request.data.get('answers', {})  # {question_id: index_int}
         questions = course.questions.all()
 
         if len(answers) != questions.count():
@@ -116,10 +116,19 @@ class CourseViewSet(viewsets.ModelViewSet):
             )
 
         correct_count = 0
+        question_results = {}
         for question in questions:
-            if str(question.id) in answers:
-                if answers[str(question.id)] == question.correct_option:
+            q_id = str(question.id)
+            if q_id in answers:
+                user_answer = int(answers[q_id])
+                is_correct = user_answer == question.correct_option
+                if is_correct:
                     correct_count += 1
+                question_results[q_id] = {
+                    'correct': is_correct,
+                    'your_answer': user_answer,
+                    'correct_answer': question.correct_option,
+                }
 
         score = int((correct_count / questions.count()) * 100)
         passed = score >= course.passing_score
@@ -138,7 +147,8 @@ class CourseViewSet(viewsets.ModelViewSet):
             'passed': passed,
             'correct_count': correct_count,
             'total_questions': questions.count(),
-            'passing_score': course.passing_score
+            'passing_score': course.passing_score,
+            'question_results': question_results,
         })
 
 

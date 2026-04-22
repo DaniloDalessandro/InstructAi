@@ -43,11 +43,8 @@ interface LessonInput {
 
 interface QuestionInput {
   text: string;
-  option_a: string;
-  option_b: string;
-  option_c: string;
-  option_d: string;
-  correct_option: 'A' | 'B' | 'C' | 'D';
+  options: string[];
+  correct_option: number; // 0-based index
 }
 
 interface CourseStepperFormProps {
@@ -79,14 +76,10 @@ export default function CourseStepperForm({
 
   // Estado para gerenciamento de questões (Step 3)
   const [editingQuestionIndex, setEditingQuestionIndex] = useState<number | null>(null);
-  const [optionCount, setOptionCount] = useState<3 | 4>(4);
   const [currentQuestion, setCurrentQuestion] = useState<QuestionInput>({
     text: '',
-    option_a: '',
-    option_b: '',
-    option_c: '',
-    option_d: '',
-    correct_option: 'A',
+    options: ['', ''],
+    correct_option: 0,
   });
   const [formData, setFormData] = useState<{
     name: string;
@@ -132,18 +125,10 @@ export default function CourseStepperForm({
       });
       setLessons([]);
       setQuestions([]);
-      setOptionCount(4);
       setEditingLessonIndex(null);
       setCurrentLesson({ name: '', youtube_url: '' });
       setEditingQuestionIndex(null);
-      setCurrentQuestion({
-        text: '',
-        option_a: '',
-        option_b: '',
-        option_c: '',
-        option_d: '',
-        correct_option: 'A',
-      });
+      setCurrentQuestion({ text: '', options: ['', ''], correct_option: 0 });
     }
   }, [open]);
 
@@ -243,10 +228,16 @@ export default function CourseStepperForm({
   };
 
   // Funções de gerenciamento de questões (Step 3)
+  const getActiveOptionFields = (): (keyof QuestionInput)[] => {
+    const fields: (keyof QuestionInput)[] = ['option_a', 'option_b'];
+    if (optionCount >= 3) fields.push('option_c');
+    if (optionCount >= 4) fields.push('option_d');
+    return fields;
+  };
+
   const handleAddQuestion = () => {
-    const requiredOptions = optionCount === 3
-      ? [currentQuestion.option_a, currentQuestion.option_b, currentQuestion.option_c]
-      : [currentQuestion.option_a, currentQuestion.option_b, currentQuestion.option_c, currentQuestion.option_d];
+    const activeFields = getActiveOptionFields();
+    const requiredOptions = activeFields.map((f) => currentQuestion[f] as string);
 
     if (!currentQuestion.text.trim() || requiredOptions.some((o) => !o.trim())) {
       toast({
@@ -257,14 +248,16 @@ export default function CourseStepperForm({
       return;
     }
 
-    const safeCorrect = (optionCount === 3 && currentQuestion.correct_option === 'D')
-      ? 'C' as const
-      : currentQuestion.correct_option;
+    const allowedOptions = (['A', 'B', 'C', 'D'] as const).slice(0, optionCount);
+    const safeCorrect = allowedOptions.includes(currentQuestion.correct_option)
+      ? currentQuestion.correct_option
+      : allowedOptions[allowedOptions.length - 1];
 
     const questionToAdd: QuestionInput = {
       ...currentQuestion,
       correct_option: safeCorrect,
-      option_d: optionCount === 3 ? '' : currentQuestion.option_d,
+      option_c: optionCount < 3 ? '' : currentQuestion.option_c,
+      option_d: optionCount < 4 ? '' : currentQuestion.option_d,
     };
 
     setQuestions([...questions, questionToAdd]);
@@ -278,9 +271,8 @@ export default function CourseStepperForm({
   };
 
   const handleUpdateQuestion = () => {
-    const requiredOptions = optionCount === 3
-      ? [currentQuestion.option_a, currentQuestion.option_b, currentQuestion.option_c]
-      : [currentQuestion.option_a, currentQuestion.option_b, currentQuestion.option_c, currentQuestion.option_d];
+    const activeFields = getActiveOptionFields();
+    const requiredOptions = activeFields.map((f) => currentQuestion[f] as string);
 
     if (!currentQuestion.text.trim() || requiredOptions.some((o) => !o.trim())) {
       toast({
@@ -294,7 +286,8 @@ export default function CourseStepperForm({
     const updatedQuestions = [...questions];
     updatedQuestions[editingQuestionIndex!] = {
       ...currentQuestion,
-      option_d: optionCount === 3 ? '' : currentQuestion.option_d,
+      option_c: optionCount < 3 ? '' : currentQuestion.option_c,
+      option_d: optionCount < 4 ? '' : currentQuestion.option_d,
     };
     setQuestions(updatedQuestions);
     setEditingQuestionIndex(null);
@@ -1089,10 +1082,14 @@ export default function CourseStepperForm({
   };
 
   const renderStep3 = () => {
-    const activeOptions = (['A', 'B', 'C', 'D'] as const).slice(0, optionCount);
+    const allOptions = (['A', 'B', 'C', 'D'] as const);
+    const activeOptions = allOptions.slice(0, optionCount);
     const fieldMap: Record<string, keyof QuestionInput> = {
       A: 'option_a', B: 'option_b', C: 'option_c', D: 'option_d',
     };
+    const isLocked = questions.length > 0;
+    const canAddOption = !isLocked && optionCount < 4;
+    const canRemoveOption = !isLocked && optionCount > 2;
 
     return (
       <div className="flex-1 min-h-0 py-4 overflow-hidden flex flex-col">
@@ -1116,46 +1113,6 @@ export default function CourseStepperForm({
             {/* Formulário scrollável dentro da coluna */}
             <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
 
-              {/* Seletor de quantidade de opções */}
-              <div className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-xl border text-sm',
-                questions.length > 0 ? 'bg-muted/30 text-muted-foreground' : 'bg-card',
-              )}>
-                {questions.length > 0 ? (
-                  <>
-                    <Lock className="w-3.5 h-3.5 shrink-0" />
-                    <span className="text-xs">Todas as questões têm <strong className="text-foreground">{optionCount} opções</strong></span>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-xs text-muted-foreground shrink-0">Opções por questão:</span>
-                    <div className="flex gap-1.5">
-                      {([3, 4] as const).map((n) => (
-                        <button
-                          key={n}
-                          type="button"
-                          onClick={() => {
-                            setOptionCount(n);
-                            if (n === 3 && currentQuestion.correct_option === 'D') {
-                              setCurrentQuestion({ ...currentQuestion, correct_option: 'C' });
-                            }
-                          }}
-                          className={cn(
-                            'w-8 h-8 rounded-lg text-xs font-bold border transition-all',
-                            optionCount === n
-                              ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                              : 'bg-card hover:bg-muted border-border text-muted-foreground',
-                          )}
-                        >
-                          {n}
-                        </button>
-                      ))}
-                    </div>
-                    <span className="text-xs text-muted-foreground">Fixado na 1ª questão</span>
-                  </>
-                )}
-              </div>
-
               {/* Enunciado */}
               <div className="grid gap-2">
                 <Label htmlFor="current-question-text">Enunciado *</Label>
@@ -1173,12 +1130,20 @@ export default function CourseStepperForm({
               <div className="grid gap-2">
                 <div className="flex items-center justify-between">
                   <Label>Alternativas *</Label>
-                  <span className="text-[11px] text-muted-foreground">Clique no círculo para marcar a correta</span>
+                  {isLocked ? (
+                    <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                      <Lock className="w-3 h-3" />
+                      {optionCount} opções (definido na 1ª questão)
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-muted-foreground">Clique no círculo para marcar a correta</span>
+                  )}
                 </div>
                 <div className="space-y-2">
                   {activeOptions.map((option) => {
                     const field = fieldMap[option] as 'option_a' | 'option_b' | 'option_c' | 'option_d';
                     const isCorrect = currentQuestion.correct_option === option;
+                    const isLastOption = option === activeOptions[activeOptions.length - 1];
                     return (
                       <div
                         key={option}
@@ -1222,15 +1187,42 @@ export default function CourseStepperForm({
                           )}
                         />
 
-                        {/* Label "Correta" */}
-                        {isCorrect && (
+                        {/* Label "Correta" ou botão remover última opção */}
+                        {isCorrect ? (
                           <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 shrink-0 bg-emerald-100 dark:bg-emerald-900/40 px-1.5 py-0.5 rounded-md">
                             ✓ Correta
                           </span>
-                        )}
+                        ) : isLastOption && canRemoveOption ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const prevOption = allOptions[optionCount - 2];
+                              if (currentQuestion.correct_option === option) {
+                                setCurrentQuestion({ ...currentQuestion, correct_option: prevOption });
+                              }
+                              setOptionCount(optionCount - 1);
+                            }}
+                            className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                            title="Remover esta opção"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        ) : null}
                       </div>
                     );
                   })}
+
+                  {/* Botão adicionar opção */}
+                  {canAddOption && (
+                    <button
+                      type="button"
+                      onClick={() => setOptionCount(optionCount + 1)}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-muted-foreground/30 text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5 transition-all text-sm"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Adicionar opção {allOptions[optionCount]}
+                    </button>
+                  )}
                 </div>
               </div>
 

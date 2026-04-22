@@ -72,20 +72,10 @@ class Lesson(models.Model):
 
 class Question(models.Model):
     """Modelo de Questão da Prova"""
-    OPTION_CHOICES = [
-        ('A', 'Opção A'),
-        ('B', 'Opção B'),
-        ('C', 'Opção C'),
-        ('D', 'Opção D'),
-    ]
-
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='questions', verbose_name='Curso')
     text = models.TextField(verbose_name='Enunciado da Questão')
-    option_a = models.CharField(max_length=500, verbose_name='Alternativa A')
-    option_b = models.CharField(max_length=500, verbose_name='Alternativa B')
-    option_c = models.CharField(max_length=500, verbose_name='Alternativa C')
-    option_d = models.CharField(max_length=500, verbose_name='Alternativa D')
-    correct_option = models.CharField(max_length=1, choices=OPTION_CHOICES, verbose_name='Alternativa Correta')
+    options = models.JSONField(default=list, verbose_name='Opções')
+    correct_option = models.IntegerField(default=0, verbose_name='Índice da Alternativa Correta')
     order = models.IntegerField(default=0, verbose_name='Ordem')
 
     # Auditoria

@@ -70,11 +70,8 @@ export interface Question {
   id: string;
   course: string;
   text: string;
-  option_a: string;
-  option_b: string;
-  option_c: string;
-  option_d: string;
-  correct_option: 'A' | 'B' | 'C' | 'D';
+  options: string[];
+  correct_option: number;
   order: number;
   created_at: string;
   updated_at: string;
@@ -85,10 +82,7 @@ export interface Question {
 export interface QuestionPublic {
   id: string;
   text: string;
-  option_a: string;
-  option_b: string;
-  option_c: string;
-  option_d: string;
+  options: string[];
   order: number;
 }
 
@@ -113,7 +107,7 @@ export interface UserCourseProgress {
 }
 
 export interface ExamSubmission {
-  answers: Record<string, 'A' | 'B' | 'C' | 'D'>; // question_id: selected_option
+  answers: Record<string, number>; // question_id: selected_option_index
 }
 
 export interface QuestionResult {
@@ -167,11 +161,8 @@ export interface LessonFormData {
 export interface QuestionFormData {
   course: string;
   text: string;
-  option_a: string;
-  option_b: string;
-  option_c: string;
-  option_d: string;
-  correct_option: 'A' | 'B' | 'C' | 'D';
+  options: string[];
+  correct_option: number;
   order: number;
 }
 

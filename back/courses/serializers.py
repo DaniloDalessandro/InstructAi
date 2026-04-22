@@ -42,8 +42,7 @@ class QuestionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Question
         fields = [
-            'id', 'course', 'text', 'option_a', 'option_b',
-            'option_c', 'option_d', 'correct_option', 'order',
+            'id', 'course', 'text', 'options', 'correct_option', 'order',
             'created_at', 'updated_at', 'created_by', 'updated_by'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
@@ -68,10 +67,7 @@ class QuestionPublicSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Question
-        fields = [
-            'id', 'text', 'option_a', 'option_b',
-            'option_c', 'option_d', 'order'
-        ]
+        fields = ['id', 'text', 'options', 'order']
         read_only_fields = ['id']
 
 
