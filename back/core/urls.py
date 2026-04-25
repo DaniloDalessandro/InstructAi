@@ -17,6 +17,7 @@ urlpatterns = [
     path("api/v1/", include("manual.urls")),
     path("api/v1/", include("courses.urls")),
     path("api/v1/alice/", include("agent.urls")),
+    path("api/v1/knowledge/", include("documents.urls")),
     # Serve de arquivos de mídia (em produção usar nginx/S3)
     re_path(r"^media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}),
 ]

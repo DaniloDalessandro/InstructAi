@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "manual",
     "courses",
     "agent",
+    "documents",
     # Should be at the bottom to auto-delete files
     "django_cleanup.apps.CleanupConfig",
 ]
@@ -140,8 +141,36 @@ ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/mov', 'video/quicktime'
 # Tipo de chave primária padrão
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Chave da API OpenAI — necessária para o agente Alice
+# ── OpenAI ─────────────────────────────────────────────────────────────────
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+OPENAI_EMBEDDING_MODEL = os.environ.get("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+OPENAI_CHAT_MODEL = os.environ.get("OPENAI_CHAT_MODEL", "gpt-4o-mini")
+EMBEDDING_DIMENSIONS = 1536  # text-embedding-3-small
+
+# ── Redis ───────────────────────────────────────────────────────────────────
+REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": REDIS_URL,
+        "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
+        "TIMEOUT": 3600,
+    }
+}
+
+# ── Celery ──────────────────────────────────────────────────────────────────
+CELERY_BROKER_URL = REDIS_URL
+CELERY_RESULT_BACKEND = REDIS_URL
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_ROUTES = {
+    "documents.tasks.*": {"queue": "documents"},
+}
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 600  # 10 min max por task
 
 # Modelo de usuário customizado
 AUTH_USER_MODEL = "accounts.CustomUser"

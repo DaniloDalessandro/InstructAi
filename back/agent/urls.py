@@ -3,6 +3,7 @@ from . import views
 
 urlpatterns = [
     path("chat/", views.AliceChatView.as_view(), name="alice-chat"),
+    path("stream/", views.AliceStreamView.as_view(), name="alice-stream"),
     path("quick/", views.AliceQuickView.as_view(), name="alice-quick"),
     path("stats/", views.AliceStatsView.as_view(), name="alice-stats"),
     path("sessions/", views.AliceSessionListView.as_view(), name="alice-sessions"),
