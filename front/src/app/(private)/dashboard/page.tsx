@@ -81,9 +81,9 @@ export default function DashboardPage() {
         const tutorialSteps = tuts.reduce((acc, t) => acc + (t.step_count ?? 0), 0)
 
         const contentDistribution = [
-          { name: "Tutoriais", value: tutCount, color: "oklch(0.46 0.2 264)" },
-          { name: "Manuais", value: manualsCount, color: "oklch(0.58 0.22 310)" },
-          { name: "Cursos", value: coursesCount, color: "oklch(0.62 0.16 155)" },
+          { name: "Tutoriais", value: tutCount, color: "#5e6ad2" },
+          { name: "Manuais", value: manualsCount, color: "#7170ff" },
+          { name: "Cursos", value: coursesCount, color: "#10b981" },
         ].filter((d) => d.value > 0)
 
         // mocked activity trend
@@ -120,7 +120,7 @@ export default function DashboardPage() {
         {/* Hero stat: tutoriais */}
         <Link
           href="/tutoriais"
-          className="group relative overflow-hidden rounded-2xl border bg-card p-6 hover:border-primary/50 transition-all"
+          className="group relative overflow-hidden rounded-2xl border bg-card p-6 hover:border-primary/40 transition-all duration-150"
         >
           <div className="absolute inset-0 -z-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-70" />
           <div className="relative flex items-start justify-between mb-4">
@@ -321,10 +321,10 @@ function SmallKpi({
   icon: any; label: string; value: number; sub: string; href?: string; accent: "violet" | "emerald" | "amber" | "primary"
 }) {
   const accentCls = {
-    violet: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
-    emerald: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-    amber: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-    primary: "bg-primary/10 text-primary",
+    violet: "bg-[#7170ff]/15 text-[#828fff]",
+    emerald: "bg-emerald-500/15 text-emerald-400",
+    amber: "bg-amber-500/15 text-amber-400",
+    primary: "bg-primary/15 text-primary",
   }[accent]
 
   const inner = (

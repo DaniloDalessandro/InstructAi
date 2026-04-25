@@ -43,7 +43,7 @@ export function ManualCard({ manual, onView, onEdit, onDelete }: ManualCardProps
   return (
     <div
       style={{ minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}
-      className="bg-card text-card-foreground rounded-xl border shadow-sm hover:shadow-lg transition-shadow duration-200 flex flex-col"
+      className="bg-card text-card-foreground rounded-xl border hover:border-white/15 transition-all duration-150 flex flex-col"
     >
       {/* Header */}
       <div className="px-5 pt-5 pb-3 flex flex-col gap-2 cursor-pointer" style={{ minWidth: 0 }} onClick={() => onView(manual)}>
@@ -62,7 +62,7 @@ export function ManualCard({ manual, onView, onEdit, onDelete }: ManualCardProps
           <div className="flex items-center gap-1 shrink-0">
             <Badge
               variant={manual.is_active ? 'default' : 'secondary'}
-              className={manual.is_active ? 'bg-green-500' : 'bg-gray-500'}
+              className={manual.is_active ? 'bg-emerald-500/90 border-0' : ''}
             >
               {manual.is_active ? 'Ativo' : 'Inativo'}
             </Badge>

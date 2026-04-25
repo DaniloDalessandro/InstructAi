@@ -32,11 +32,11 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 
   return (
     <div className={cn("space-y-6", className)} {...props}>
-      {/* Brand — logo + título */}
+      {/* Brand */}
       <div className="text-center space-y-3">
-        <div className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
+        <div className="mx-auto w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: "#5e6ad2" }}>
           <svg
-            className="w-8 h-8 text-white"
+            className="w-6 h-6 text-white"
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 24 24"
             fill="none"
@@ -45,33 +45,29 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
             strokeLinecap="round"
             strokeLinejoin="round"
           >
-            {/* Livro aberto */}
             <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
             <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-            <circle cx="12" cy="9" r="2" fill="currentColor" opacity="0.8" />
-            <path d="M12 11v2" opacity="0.6" />
           </svg>
         </div>
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
+          <h1 className="text-2xl font-semibold text-foreground" style={{ letterSpacing: "-0.5px" }}>
             InstructAI
           </h1>
-          <p className="text-gray-500 mt-1 text-sm">
+          <p className="text-muted-foreground mt-1 text-sm">
             Sistema de Gestão de Conhecimento
           </p>
         </div>
       </div>
 
       {/* Card do formulário */}
-      <Card className="bg-white shadow-xl rounded-2xl border border-gray-100">
-        <CardContent className="p-7">
-          <form onSubmit={handleLogin} className="space-y-5">
-            {/* Erro de autenticação */}
+      <Card className="rounded-xl border bg-card">
+        <CardContent className="p-6">
+          <form onSubmit={handleLogin} className="space-y-4">
             {error && (
-              <div className="flex items-start gap-2.5 p-3.5 rounded-lg bg-red-50 border border-red-100">
+              <div className="flex items-start gap-2.5 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  className="h-4 w-4 text-red-500 mt-0.5 shrink-0"
+                  className="h-4 w-4 text-destructive mt-0.5 shrink-0"
                   viewBox="0 0 20 20"
                   fill="currentColor"
                 >
@@ -81,14 +77,13 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                     clipRule="evenodd"
                   />
                 </svg>
-                <span className="text-red-700 text-sm leading-snug">{error}</span>
+                <span className="text-destructive text-sm leading-snug">{error}</span>
               </div>
             )}
 
-            <div className="space-y-4">
-              {/* Campo Email */}
+            <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label htmlFor="email" className="text-sm font-medium text-gray-700">
+                <Label htmlFor="email" className="text-[13px] font-medium text-foreground/80">
                   Email
                 </Label>
                 <Input
@@ -98,13 +93,12 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="h-11 bg-gray-50 border-gray-200 focus:bg-white transition-colors"
+                  className="h-9"
                 />
               </div>
 
-              {/* Campo Senha */}
               <div className="space-y-1.5">
-                <Label htmlFor="password" className="text-sm font-medium text-gray-700">
+                <Label htmlFor="password" className="text-[13px] font-medium text-foreground/80">
                   Senha
                 </Label>
                 <Input
@@ -114,14 +108,14 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-11 bg-gray-50 border-gray-200 focus:bg-white transition-colors"
+                  className="h-9"
                 />
               </div>
             </div>
 
             <Button
               type="submit"
-              className="w-full h-11 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-xl transition-all duration-200 shadow-md hover:shadow-lg"
+              className="w-full h-9 font-medium"
             >
               Entrar
             </Button>
@@ -129,8 +123,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
         </CardContent>
       </Card>
 
-      {/* Footer */}
-      <p className="text-center text-gray-400 text-xs">
+      <p className="text-center text-muted-foreground/50 text-xs">
         © {new Date().getFullYear()} InstructAI · Todos os direitos reservados
       </p>
     </div>

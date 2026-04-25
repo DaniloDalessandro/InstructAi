@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Award, BadgeCheck, ChevronsUpDown, Lock, LogOut } from "lucide-react"
+import { Award, BadgeCheck, ChevronsUpDown, Lock, LogOut, Sun, Moon, Monitor } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -19,9 +19,11 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { useAuthContext } from "@/contexts/AuthContext"
+import { useTheme } from "@/contexts/ThemeContext"
 import { UserProfileForm } from "@/components/forms/UserProfileForm"
 import { ChangePasswordForm } from "@/components/forms/ChangePasswordForm"
 import { useRouter } from "next/navigation"
+import { cn } from "@/lib/utils/utils"
 
 export function NavUser({
   user,
@@ -34,6 +36,7 @@ export function NavUser({
 }) {
   const { isMobile } = useSidebar()
   const { logout } = useAuthContext()
+  const { theme, setTheme } = useTheme()
   const router = useRouter()
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [isPasswordOpen, setIsPasswordOpen] = useState(false)
@@ -128,6 +131,39 @@ export function NavUser({
                   Meus Certificados
                 </DropdownMenuItem>
               </DropdownMenuGroup>
+
+              <DropdownMenuSeparator />
+
+              {/* Theme switcher */}
+              <div className="flex items-center justify-between px-2 py-1.5">
+                <span className="text-sm text-muted-foreground">Tema</span>
+                <div className="flex items-center gap-0.5 rounded-md border border-white/8 bg-white/3 p-0.5">
+                  {(
+                    [
+                      { value: "light",  Icon: Sun,     label: "Claro"   },
+                      { value: "system", Icon: Monitor, label: "Sistema" },
+                      { value: "dark",   Icon: Moon,    label: "Escuro"  },
+                    ] as const
+                  ).map(({ value, Icon, label }) => (
+                    <button
+                      key={value}
+                      title={label}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        setTheme(value)
+                      }}
+                      className={cn(
+                        "flex items-center justify-center w-7 h-6 rounded transition-all duration-150",
+                        theme === value
+                          ? "bg-white/10 text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                      )}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={logout} className="cursor-pointer">

@@ -293,51 +293,69 @@ export function DataTable<TData>({
   });
 
   return (
-    <Card className="shadow-sm border bg-card/80 backdrop-blur pb-0.5">
-      <CardHeader className="pb-1">
-        <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/50">
+    <Card className="border bg-card pb-0 overflow-hidden">
+      <CardHeader className="pb-0 gap-0">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div>
-            <h2 className="text-xl font-bold text-foreground">{title}</h2>
+            <h2 className="text-base font-semibold text-foreground" style={{ letterSpacing: "-0.2px" }}>{title}</h2>
             {subtitle && (
-              <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+              <p className="text-[13px] text-muted-foreground mt-0.5">{subtitle}</p>
             )}
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1">
             {onAdd && (
-              <Plus
-                className="h-6 w-6 cursor-pointer"
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onClick={onAdd}
                 aria-label="Adicionar novo item"
-                role="button"
-              />
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
             )}
             {onViewDetails && selectedRow && (
-              <Eye
-                className="h-6 w-6 cursor-pointer"
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onClick={() => onViewDetails(selectedRow)}
-                aria-label="Ver detalhes do item selecionado"
-                role="button"
-              />
+                aria-label="Ver detalhes"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
             )}
             {!readOnly && selectedRow && (
               <>
-                <Edit
-                  className="h-6 w-6 cursor-pointer"
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
                   onClick={() => onEdit?.(selectedRow)}
                   aria-label="Editar item"
-                  role="button"
-                />
-                <Trash
-                  className="h-6 w-6 cursor-pointer"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
                   onClick={() => onDelete?.(selectedRow)}
                   aria-label="Excluir item"
-                  role="button"
-                />
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <Trash className="h-4 w-4" />
+                </Button>
               </>
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Settings className="h-6 w-6 cursor-pointer" />
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Settings className="h-4 w-4" />
+                </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 {table
@@ -366,22 +384,21 @@ export function DataTable<TData>({
         </div>
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="p-0">
         {/* TAGS DE FILTROS */}
         {displayableFilters.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-3">
+          <div className="flex flex-wrap gap-1.5 px-5 py-3 border-b border-border">
             {displayableFilters.map((filter) => {
               const column = table.getColumn(filter.id);
               const filterMeta = column?.columnDef.meta as any;
               let displayValue = filter.value;
 
-              // Se for um filtro do tipo select, buscar o label correspondente
               if (filterMeta?.filterType === "select" && filterMeta?.filterOptions) {
                 const option = filterMeta.filterOptions.find((opt: any) => opt.value === filter.value);
                 if (option && option.value !== "all") {
                   displayValue = option.label;
                 } else {
-                  return null; // Não mostrar badge quando "Todos" está selecionado ou valor inválido
+                  return null;
                 }
               }
 
@@ -391,34 +408,32 @@ export function DataTable<TData>({
               return (
                 <Badge
                   key={filter.id}
-                  variant="outline"
-                  className="flex items-center gap-1"
+                  variant="secondary"
+                  className="flex items-center gap-1 h-6"
                 >
-                  <span className="font-medium">{headerDisplay}:</span>{" "}
-                  <span>{String(displayValue)}</span>
+                  <span className="text-muted-foreground">{headerDisplay}:</span>{" "}
+                  <span className="text-foreground">{String(displayValue)}</span>
                   <X
-                    className="h-3 w-3 cursor-pointer ml-1"
+                    className="h-3 w-3 cursor-pointer ml-0.5 text-muted-foreground hover:text-foreground"
                     onClick={() => clearFilter(filter.id)}
                   />
                 </Badge>
               );
             })}
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
               onClick={clearAllFilters}
-              className="ml-2 text-sm text-destructive"
+              className="text-[12px] text-destructive hover:text-destructive/80 transition-colors px-1"
             >
               Limpar filtros
-            </Button>
+            </button>
           </div>
         )}
 
-        <div className="border shadow-sm">
+        <div>
           <Table>
-            <TableHeader className="bg-muted/40">
+            <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id}>
+                <TableRow key={headerGroup.id} className="border-b border-border hover:bg-transparent">
                   {headerGroup.headers.map((header) => {
                     const meta = header.column.columnDef.meta as any;
                     const showFilterIcon = meta?.showFilterIcon;
@@ -429,7 +444,7 @@ export function DataTable<TData>({
                     const headerDisplay = typeof headerDef === 'function' ? header.column.id : (headerDef || header.column.id);
 
                     return (
-                      <TableHead key={header.id} className="font-semibold">
+                      <TableHead key={header.id} className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider h-9">
                         <div className="flex items-center justify-between w-full">
                           <div className="flex items-center gap-1 flex-1 min-w-0">
                             {showFilterIcon && (
@@ -445,43 +460,39 @@ export function DataTable<TData>({
                                   }}
                                 >
                                   <PopoverTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-7 w-7 p-0 hover:bg-muted"
+                                    <button
+                                      className="h-6 w-6 p-0 flex items-center justify-center rounded hover:bg-white/5 transition-colors"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setOpenFilterId(isFilterOpen ? null : columnId);
                                       }}
                                     >
                                       <Filter
-                                        className={`h-3.5 w-3.5 ${
+                                        className={`h-3 w-3 ${
                                           filterValue
                                             ? "text-primary"
-                                            : "text-muted-foreground"
+                                            : "text-muted-foreground/50"
                                         }`}
                                       />
-                                    </Button>
+                                    </button>
                                   </PopoverTrigger>
                                   <PopoverContent
-                                    className="w-60 p-3"
+                                    className="w-56 p-3"
                                     align="start"
                                     onClick={(e) => e.stopPropagation()}
                                   >
                                     <div className="space-y-2">
                                       <div className="flex items-center justify-between">
-                                        <h4 className="font-medium">
+                                        <h4 className="text-[13px] font-medium">
                                           Filtrar {headerDisplay}
                                         </h4>
                                         {Boolean(filterValue) && (
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-6 px-2"
+                                          <button
+                                            className="h-6 w-6 flex items-center justify-center rounded hover:bg-white/5 text-muted-foreground hover:text-foreground"
                                             onClick={() => clearFilter(columnId)}
                                           >
                                             <X className="h-3 w-3" />
-                                          </Button>
+                                          </button>
                                         )}
                                       </div>
                                       {meta?.filterType === "select" ? (
@@ -491,7 +502,7 @@ export function DataTable<TData>({
                                             handleFilterChange(columnId, value)
                                           }
                                         >
-                                          <SelectTrigger className="w-full">
+                                          <SelectTrigger className="w-full h-8">
                                             <SelectValue placeholder="Selecione..." />
                                           </SelectTrigger>
                                           <SelectContent>
@@ -504,7 +515,7 @@ export function DataTable<TData>({
                                         </Select>
                                       ) : (
                                         <Input
-                                          placeholder={`Filtrar...`}
+                                          placeholder="Filtrar..."
                                           value={String(filterValue || "")}
                                           onChange={(e) =>
                                             handleFilterChange(
@@ -521,7 +532,7 @@ export function DataTable<TData>({
                               </div>
                             )}
                             <div
-                              className="cursor-pointer select-none flex items-center flex-1 min-w-0"
+                              className="cursor-pointer select-none flex items-center flex-1 min-w-0 gap-1"
                               onClick={() =>
                                 header.column.getCanSort() &&
                                 header.column.toggleSorting()
@@ -534,7 +545,7 @@ export function DataTable<TData>({
                                 )}
                               </span>
                               {header.column.getCanSort() && (
-                                <span className="ml-1 text-muted-foreground flex-shrink-0">
+                                <span className="text-muted-foreground/40 flex-shrink-0 text-[10px]">
                                   {{
                                     asc: "▲",
                                     desc: "▼",
@@ -556,8 +567,10 @@ export function DataTable<TData>({
                   <TableRow
                     key={row.id}
                     data-state={row.getIsSelected() && "selected"}
-                    className={`hover:bg-muted/30 transition-colors ${
-                      (selectedRow as any)?.id === (row.original as any).id ? "bg-muted" : ""
+                    className={`border-b border-border/50 transition-colors cursor-pointer text-[13px] ${
+                      (selectedRow as any)?.id === (row.original as any).id
+                        ? "bg-white/[0.04]"
+                        : "hover:bg-white/[0.02]"
                     }`}
                     onClick={() =>
                       setSelectedRow(
@@ -568,11 +581,11 @@ export function DataTable<TData>({
                     {row.getVisibleCells().map((cell) => {
                       const showFilterIcon = (cell.column.columnDef.meta as any)?.showFilterIcon;
                       return (
-                        <TableCell key={cell.id} className="py-2">
+                        <TableCell key={cell.id} className="py-2.5">
                           <div className="flex items-center w-full">
                             <div className="flex items-center gap-1 flex-1 min-w-0">
                               {showFilterIcon && (
-                                <div className="w-7 flex-shrink-0"></div>
+                                <div className="w-6 flex-shrink-0"></div>
                               )}
                               <div className="flex-1 min-w-0">
                                 <span className="truncate block">
@@ -588,7 +601,7 @@ export function DataTable<TData>({
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={columns.length} className="text-center py-10">
+                  <TableCell colSpan={columns.length} className="text-center py-12 text-muted-foreground text-[13px]">
                     Nenhum registro encontrado.
                   </TableCell>
                 </TableRow>
@@ -598,20 +611,19 @@ export function DataTable<TData>({
         </div>
 
         {/* PAGINAÇÃO */}
-        <div className="flex items-center justify-between space-x-2 py-2">
-          <div className="flex-1 text-sm text-muted-foreground">
-            Página {pageIndex + 1} de {Math.ceil(totalCount / pageSize)} —{" "}
-            {totalCount} registros
+        <div className="flex items-center justify-between px-5 py-3 border-t border-border">
+          <div className="text-[12px] text-muted-foreground">
+            Página {pageIndex + 1} de {Math.ceil(totalCount / pageSize) || 1} — {totalCount} registros
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <Select
               value={pageSize.toString()}
               onValueChange={(value) => {
                 onPageSizeChange && onPageSizeChange(Number(value));
               }}
             >
-              <SelectTrigger className="w-[160px]">
+              <SelectTrigger className="w-[130px] h-7 text-[12px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -620,43 +632,45 @@ export function DataTable<TData>({
                 <SelectItem value="20">20 por página</SelectItem>
               </SelectContent>
             </Select>
-          </div>
 
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange && onPageChange(0)}
-              disabled={pageIndex === 0}
-            >
-              {"<<"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange && onPageChange(pageIndex - 1)}
-              disabled={pageIndex === 0}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange && onPageChange(pageIndex + 1)}
-              disabled={pageIndex >= Math.ceil(totalCount / pageSize) - 1}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange && onPageChange(Math.ceil(totalCount / pageSize) - 1)}
-              disabled={pageIndex >= Math.ceil(totalCount / pageSize) - 1}
-            >
-              {">>"}
-            </Button>
-
-
+            <div className="flex gap-1">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => onPageChange && onPageChange(0)}
+                disabled={pageIndex === 0}
+                className="h-7 w-7 text-muted-foreground"
+              >
+                {"«"}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => onPageChange && onPageChange(pageIndex - 1)}
+                disabled={pageIndex === 0}
+                className="h-7 w-7 text-muted-foreground"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => onPageChange && onPageChange(pageIndex + 1)}
+                disabled={pageIndex >= Math.ceil(totalCount / pageSize) - 1}
+                className="h-7 w-7 text-muted-foreground"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => onPageChange && onPageChange(Math.ceil(totalCount / pageSize) - 1)}
+                disabled={pageIndex >= Math.ceil(totalCount / pageSize) - 1}
+                className="h-7 w-7 text-muted-foreground"
+              >
+                {"»"}
+              </Button>
+            </div>
           </div>
         </div>
       </CardContent>

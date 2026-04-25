@@ -19,15 +19,15 @@ const statusConfig: Record<
 > = {
   not_started: {
     label: 'Não iniciado',
-    className: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+    className: 'bg-white/5 text-muted-foreground border-white/10',
   },
   in_progress: {
     label: 'Em andamento',
-    className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400',
+    className: 'bg-primary/15 text-primary border-primary/20',
   },
   completed: {
     label: 'Concluído',
-    className: 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400',
+    className: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20',
   },
 };
 
@@ -50,7 +50,7 @@ export function CourseCard({ course, onAccess }: CourseCardProps) {
 
   return (
     <Card
-      className="group cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary/50"
+      className="group cursor-pointer transition-all duration-150 hover:border-white/15"
       onClick={() => onAccess(course)}
     >
       <CardHeader className="pb-4">
@@ -105,8 +105,8 @@ export function CourseCard({ course, onAccess }: CourseCardProps) {
             <span className="text-muted-foreground">Progresso</span>
             <span className={cn(
               "font-semibold",
-              status === 'completed' && "text-green-600 dark:text-green-400",
-              status === 'in_progress' && "text-blue-600 dark:text-blue-400",
+              status === 'completed' && "text-emerald-400",
+              status === 'in_progress' && "text-primary",
               status === 'not_started' && "text-muted-foreground"
             )}>
               {Math.round(progress)}%
@@ -115,9 +115,9 @@ export function CourseCard({ course, onAccess }: CourseCardProps) {
           <Progress
             value={progress}
             className={cn(
-              "h-2",
-              status === 'completed' && "[&>div]:bg-green-600",
-              status === 'in_progress' && "[&>div]:bg-blue-600"
+              "h-1.5",
+              status === 'completed' && "[&>div]:bg-emerald-500",
+              status === 'in_progress' && "[&>div]:bg-primary"
             )}
           />
         </div>

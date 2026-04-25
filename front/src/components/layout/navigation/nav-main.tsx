@@ -41,7 +41,7 @@ export function NavMain({
 
   return (
     <SidebarGroup>
-      <SidebarGroupLabel className="text-[11px] uppercase tracking-widest text-muted-foreground/60 px-3 mb-1">
+      <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground/50 px-3 mb-0.5">
         Navegação
       </SidebarGroupLabel>
       <SidebarMenu>

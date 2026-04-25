@@ -21,16 +21,16 @@ export default function Layout({
     <DataRefreshProvider>
       <SidebarProvider>
         <AppSidebar />
-        <SidebarInset className="flex flex-col bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,oklch(from_var(--primary)_l_c_h/0.06),transparent_70%),radial-gradient(ellipse_60%_40%_at_20%_100%,oklch(0.58_0.22_310/0.05),transparent_70%)]">
-          <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 backdrop-blur-sm px-4 sticky top-0 z-10">
-            <SidebarTrigger className="-ml-1" />
+        <SidebarInset className="flex flex-col">
+          <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4 sticky top-0 z-10 bg-background/90 backdrop-blur-sm">
+            <SidebarTrigger className="-ml-1 text-muted-foreground hover:text-foreground transition-colors" />
             <Separator
               orientation="vertical"
-              className="mr-2 h-4"
+              className="mr-2 h-4 opacity-30"
             />
             <DynamicBreadcrumb />
           </header>
-          <main className="flex-1 px-4 py-6 md:px-6 animate-fade-in">{children}</main>
+          <main className="flex-1 px-5 py-6 md:px-7 animate-fade-in">{children}</main>
         </SidebarInset>
       </SidebarProvider>
     </DataRefreshProvider>

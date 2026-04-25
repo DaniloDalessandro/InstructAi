@@ -87,15 +87,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <div className="flex h-14 items-center px-4 border-b border-sidebar-border/60">
+        <div className="flex h-12 items-center px-4 border-b border-sidebar-border">
           <div className="flex items-center gap-2.5">
-            {/* Ícone da marca com gradiente azul */}
-            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex aspect-square size-8 items-center justify-center rounded-lg shadow-sm shrink-0">
-              <BookOpen className="size-4" />
+            <div className="flex aspect-square size-7 items-center justify-center rounded-md shrink-0" style={{ background: "#5e6ad2" }}>
+              <BookOpen className="size-3.5 text-white" />
             </div>
             <div className="grid flex-1 text-left leading-tight">
-              <span className="truncate text-sm font-semibold tracking-tight">InstructAI</span>
-              <span className="truncate text-[11px] text-muted-foreground/70">Gestão de Conhecimento</span>
+              <span className="truncate text-sm font-semibold" style={{ letterSpacing: "-0.2px" }}>InstructAI</span>
+              <span className="truncate text-[10.5px] text-muted-foreground">Gestão de Conhecimento</span>
             </div>
           </div>
         </div>

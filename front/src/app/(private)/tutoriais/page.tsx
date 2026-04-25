@@ -283,8 +283,8 @@ function TutorialCard({
               className={cn(
                 "h-5 text-[10px] font-medium border-0 px-1.5",
                 freshness === "novo"
-                  ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
-                  : "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                  ? "bg-emerald-500/15 text-emerald-400"
+                  : "bg-amber-500/15 text-amber-400"
               )}
             >
               {freshness}
