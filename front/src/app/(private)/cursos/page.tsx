@@ -14,11 +14,23 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { TagMultiSelect } from '@/components/manual/TagMultiSelect';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SectorMultiSelect } from '@/components/manual/SectorMultiSelect';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import CourseStepperForm from '@/components/forms/CourseStepperForm';
 import {
   Plus, Grid3x3, List, Search, BookOpen, Clock, Eye,
-  SortAsc, CheckCircle2, PlayCircle, BookMarked,
+  SortAsc, CheckCircle2, PlayCircle, BookMarked, Check, ChevronsUpDown, X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -71,8 +83,8 @@ export default function CursosPage() {
 
   const [search, setSearch] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [selectedSector, setSelectedSector] = useState('all');
-  const [statusFilter, setStatusFilter] = useState<CourseStatus>('all');
+  const [selectedSectors, setSelectedSectors] = useState<string[]>([]);
+  const [statusFilters, setStatusFilters] = useState<Exclude<CourseStatus, 'all'>[]>([]);
   const [view, setView] = useState<ViewMode>('gallery');
   const [sort, setSort] = useState<SortMode>('recent');
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -104,11 +116,11 @@ export default function CursosPage() {
         if (!c.name.toLowerCase().includes(q) && !c.description.toLowerCase().includes(q)) return false;
       }
       if (selectedTags.length > 0 && !selectedTags.some((id) => c.tags.includes(id))) return false;
-      if (selectedSector !== 'all' && c.sector !== selectedSector) return false;
-      if (statusFilter !== 'all' && getCourseStatus(c) !== statusFilter) return false;
+      if (selectedSectors.length > 0 && !selectedSectors.includes(c.sector)) return false;
+      if (statusFilters.length > 0 && !statusFilters.includes(getCourseStatus(c))) return false;
       return true;
     });
-  }, [courses, search, selectedTags, selectedSector, statusFilter]);
+  }, [courses, search, selectedTags, selectedSectors, statusFilters]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -120,13 +132,13 @@ export default function CursosPage() {
     });
   }, [filtered, sort]);
 
-  const hasFilters = !!search || selectedTags.length > 0 || selectedSector !== 'all' || statusFilter !== 'all';
+  const hasFilters = !!search || selectedTags.length > 0 || selectedSectors.length > 0 || statusFilters.length > 0;
 
   const clearFilters = () => {
     setSearch('');
     setSelectedTags([]);
-    setSelectedSector('all');
-    setStatusFilter('all');
+    setSelectedSectors([]);
+    setStatusFilters([]);
   };
 
   return (
@@ -168,30 +180,18 @@ export default function CursosPage() {
             </div>
 
             {/* Status */}
-            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as CourseStatus)}>
-              <SelectTrigger className="h-9 text-sm bg-background/60">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os status</SelectItem>
-                <SelectItem value="not_started">Não iniciado</SelectItem>
-                <SelectItem value="in_progress">Em andamento</SelectItem>
-                <SelectItem value="completed">Concluído</SelectItem>
-              </SelectContent>
-            </Select>
+            <StatusMultiSelect
+              selectedStatuses={statusFilters}
+              onSelectionChange={setStatusFilters}
+            />
 
             {/* Sector */}
-            <Select value={selectedSector} onValueChange={setSelectedSector}>
-              <SelectTrigger className="h-9 text-sm bg-background/60">
-                <SelectValue placeholder="Setor" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os setores</SelectItem>
-                {sectors.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SectorMultiSelect
+              sectors={sectors}
+              selectedSectorIds={selectedSectors}
+              onSelectionChange={setSelectedSectors}
+              placeholder="Setores..."
+            />
 
             {/* Tags */}
             <TagMultiSelect
@@ -301,6 +301,121 @@ export default function CursosPage() {
         onSuccess={fetchData}
       />
     </div>
+  );
+}
+
+// ─── Status Multi Select ──────────────────────────────────────
+const STATUS_OPTIONS: { value: Exclude<CourseStatus, 'all'>; label: string }[] = [
+  { value: 'not_started', label: 'Não iniciado' },
+  { value: 'in_progress', label: 'Em andamento' },
+  { value: 'completed',   label: 'Concluído' },
+];
+
+function StatusMultiSelect({
+  selectedStatuses,
+  onSelectionChange,
+}: {
+  selectedStatuses: Exclude<CourseStatus, 'all'>[];
+  onSelectionChange: (statuses: Exclude<CourseStatus, 'all'>[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const toggle = (value: Exclude<CourseStatus, 'all'>) => {
+    onSelectionChange(
+      selectedStatuses.includes(value)
+        ? selectedStatuses.filter((s) => s !== value)
+        : [...selectedStatuses, value],
+    );
+  };
+
+  const remove = (value: Exclude<CourseStatus, 'all'>, e: React.MouseEvent) => {
+    e.stopPropagation();
+    onSelectionChange(selectedStatuses.filter((s) => s !== value));
+  };
+
+  const clearAll = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onSelectionChange([]);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between min-h-9 h-auto text-sm bg-background/60"
+        >
+          <div className="flex flex-wrap gap-1 flex-1">
+            {selectedStatuses.length === 0 ? (
+              <span className="text-muted-foreground">Status...</span>
+            ) : (
+              selectedStatuses.map((s) => (
+                <Badge key={s} className={cn('gap-1 border-0', STATUS_CONFIG[s].className)}>
+                  {STATUS_CONFIG[s].label}
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => remove(s, e)}
+                    onKeyDown={(e) => e.key === 'Enter' && remove(s, e as unknown as React.MouseEvent)}
+                    className="ml-1 rounded-full outline-none focus:ring-2 focus:ring-ring cursor-pointer"
+                  >
+                    <X className="h-3 w-3" />
+                  </span>
+                </Badge>
+              ))
+            )}
+          </div>
+          <div className="flex items-center gap-1 ml-2">
+            {selectedStatuses.length > 0 && (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={clearAll}
+                onKeyDown={(e) => e.key === 'Enter' && clearAll(e as unknown as React.MouseEvent)}
+                className="rounded-full outline-none focus:ring-2 focus:ring-ring cursor-pointer"
+              >
+                <X className="h-4 w-4 opacity-50 hover:opacity-100" />
+              </span>
+            )}
+            <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+          </div>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-48 p-0" align="start">
+        <Command>
+          <CommandList>
+            <CommandEmpty>Nenhum status.</CommandEmpty>
+            <CommandGroup>
+              {STATUS_OPTIONS.map((opt) => {
+                const isSelected = selectedStatuses.includes(opt.value);
+                return (
+                  <CommandItem
+                    key={opt.value}
+                    value={opt.value}
+                    onSelect={() => toggle(opt.value)}
+                    className="cursor-pointer"
+                  >
+                    <div
+                      className={cn(
+                        'mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary',
+                        isSelected ? 'bg-primary text-primary-foreground' : 'opacity-50 [&_svg]:invisible',
+                      )}
+                    >
+                      <Check className="h-4 w-4" />
+                    </div>
+                    <Badge className={cn('border-0', STATUS_CONFIG[opt.value].className)}>
+                      {opt.label}
+                    </Badge>
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
 

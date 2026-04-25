@@ -293,11 +293,11 @@ export function DataTable<TData>({
   });
 
   return (
-    <Card className="shadow-lg pb-0.5">
+    <Card className="shadow-sm border bg-card/80 backdrop-blur pb-0.5">
       <CardHeader className="pb-1">
-        <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-100">
+        <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/50">
           <div>
-            <h2 className="text-xl font-bold text-primary">{title}</h2>
+            <h2 className="text-xl font-bold text-foreground">{title}</h2>
             {subtitle && (
               <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
             )}
@@ -407,7 +407,7 @@ export function DataTable<TData>({
               variant="ghost"
               size="sm"
               onClick={clearAllFilters}
-              className="ml-2 text-sm text-red-500"
+              className="ml-2 text-sm text-destructive"
             >
               Limpar filtros
             </Button>
@@ -416,7 +416,7 @@ export function DataTable<TData>({
 
         <div className="border shadow-sm">
           <Table>
-            <TableHeader className="bg-gray-50">
+            <TableHeader className="bg-muted/40">
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>
                   {headerGroup.headers.map((header) => {
@@ -448,7 +448,7 @@ export function DataTable<TData>({
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      className="h-7 w-7 p-0 hover:bg-gray-100"
+                                      className="h-7 w-7 p-0 hover:bg-muted"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setOpenFilterId(isFilterOpen ? null : columnId);
@@ -458,7 +458,7 @@ export function DataTable<TData>({
                                         className={`h-3.5 w-3.5 ${
                                           filterValue
                                             ? "text-primary"
-                                            : "text-gray-400"
+                                            : "text-muted-foreground"
                                         }`}
                                       />
                                     </Button>
@@ -534,7 +534,7 @@ export function DataTable<TData>({
                                 )}
                               </span>
                               {header.column.getCanSort() && (
-                                <span className="ml-1 text-gray-400 flex-shrink-0">
+                                <span className="ml-1 text-muted-foreground flex-shrink-0">
                                   {{
                                     asc: "▲",
                                     desc: "▼",
@@ -556,8 +556,8 @@ export function DataTable<TData>({
                   <TableRow
                     key={row.id}
                     data-state={row.getIsSelected() && "selected"}
-                    className={`hover:bg-gray-50 transition-colors ${
-                      (selectedRow as any)?.id === (row.original as any).id ? "bg-gray-200" : ""
+                    className={`hover:bg-muted/30 transition-colors ${
+                      (selectedRow as any)?.id === (row.original as any).id ? "bg-muted" : ""
                     }`}
                     onClick={() =>
                       setSelectedRow(
