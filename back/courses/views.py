@@ -1,4 +1,5 @@
 from django.utils import timezone
+from django.db.models import Q
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -32,18 +33,53 @@ class CourseViewSet(viewsets.ModelViewSet):
         return CourseSerializer
 
     def get_queryset(self):
-        """Filter active courses by default"""
-        queryset = Course.objects.all().prefetch_related('tags', 'lessons', 'questions').select_related('sector')
-        is_active = self.request.query_params.get('is_active', None)
+        """
+        Retorna cursos filtrados por visibilidade do usuário:
+        - Admins (is_staff/is_superuser): veem tudo
+        - Owners / shared_admins: sempre veem seus cursos
+        - Usuários comuns: respeitam filtro de setor e janela de datas
+        """
+        user = self.request.user
+        now = timezone.now()
 
-        if is_active is None:
-            queryset = queryset.filter(is_active=True)
-        elif is_active.lower() in ['true', '1', 'yes']:
-            queryset = queryset.filter(is_active=True)
-        elif is_active.lower() in ['false', '0', 'no']:
-            queryset = queryset.filter(is_active=False)
+        base = (
+            Course.objects
+            .prefetch_related('tags', 'lessons', 'questions', 'allowed_sectors')
+            .select_related('sector')
+        )
 
-        return queryset.order_by('-created_at')
+        # Filtro is_active
+        is_active_param = self.request.query_params.get('is_active', None)
+        if is_active_param is None:
+            base = base.filter(is_active=True)
+        elif is_active_param.lower() in ['true', '1', 'yes']:
+            base = base.filter(is_active=True)
+        elif is_active_param.lower() in ['false', '0', 'no']:
+            base = base.filter(is_active=False)
+
+        # Admins do sistema veem tudo
+        if user.is_staff or user.is_superuser:
+            return base.order_by('-created_at')
+
+        # Condição de setor: todos os setores OU setor do usuário está na lista
+        user_sector_id = getattr(user, 'sector_id', None)
+        if user_sector_id:
+            sector_q = Q(available_for_all_sectors=True) | Q(allowed_sectors=user_sector_id)
+        else:
+            sector_q = Q(available_for_all_sectors=True)
+
+        # Condição de data: dentro do período ou sem período
+        time_q = (
+            Q(available_from__isnull=True) | Q(available_from__lte=now)
+        ) & (
+            Q(available_until__isnull=True) | Q(available_until__gte=now)
+        )
+
+        # Owners e shared_admins bypassam filtros de setor/data
+        owned_q = Q(owner=user) | Q(shared_admins=user)
+
+        visibility_q = owned_q | (sector_q & time_q)
+        return base.filter(visibility_q).distinct().order_by('-created_at')
 
     def perform_create(self, serializer):
         from access.models import log_action
@@ -103,6 +139,56 @@ class CourseViewSet(viewsets.ModelViewSet):
         if errors:
             data['errors'] = errors
         return Response(data)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, CanManageAccess])
+    def send_notification(self, request, pk=None):
+        """
+        Envia (ou agenda) notificação por e-mail para usuários elegíveis.
+        Se o curso tem available_from no futuro, agenda a tarefa para essa data.
+        Caso contrário, dispara imediatamente.
+        """
+        from .tasks import send_course_notification
+        from django.contrib.auth import get_user_model
+
+        course = self.get_object()
+        User = get_user_model()
+        now = timezone.now()
+
+        # Contar destinatários
+        recipients = User.objects.filter(is_active=True).exclude(email='')
+        if not course.available_for_all_sectors:
+            allowed = course.allowed_sectors.all()
+            if allowed.exists():
+                recipients = recipients.filter(sector__in=allowed)
+        recipient_count = recipients.count()
+
+        if recipient_count == 0:
+            return Response(
+                {'detail': 'Nenhum usuário elegível encontrado para envio.'},
+                status=status.HTTP_200_OK,
+            )
+
+        # Agendar ou disparar imediatamente
+        scheduled = False
+        if course.available_from and course.available_from > now:
+            send_course_notification.apply_async(
+                args=[course.id],
+                eta=course.available_from,
+            )
+            scheduled = True
+        else:
+            send_course_notification.delay(course.id)
+
+        return Response({
+            'detail': (
+                f'Notificação agendada para {course.available_from.strftime("%d/%m/%Y %H:%M")}.'
+                if scheduled
+                else f'Notificação disparada para {recipient_count} usuário(s).'
+            ),
+            'recipient_count': recipient_count,
+            'scheduled': scheduled,
+            'scheduled_for': course.available_from.isoformat() if scheduled else None,
+        })
 
     @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated, CanManageAccess])
     def participants(self, request, pk=None):

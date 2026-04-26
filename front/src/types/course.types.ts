@@ -11,6 +11,8 @@ export interface UserPermissions {
   can_manage_access: boolean;
 }
 
+export type AvailabilityStatus = 'always' | 'scheduled' | 'active' | 'expired';
+
 export interface Course {
   id: string;
   name: string;
@@ -27,6 +29,15 @@ export interface Course {
   total_lessons: number;
   lessons: Lesson[];
   questions: Question[];
+  // Disponibilidade
+  available_for_all_sectors: boolean;
+  allowed_sectors: number[];
+  allowed_sectors_detail: Sector[];
+  available_from: string | null;
+  available_until: string | null;
+  send_email_notification: boolean;
+  notification_sent_at: string | null;
+  availability_status: AvailabilityStatus;
   created_at: string;
   updated_at: string;
   created_by: string;
@@ -155,6 +166,12 @@ export interface CourseFormData {
   workload_hours: number;
   exam_duration_minutes: number;
   is_active: boolean;
+  // Disponibilidade
+  available_for_all_sectors: boolean;
+  allowed_sectors: string[];
+  available_from: string | null;
+  available_until: string | null;
+  send_email_notification: boolean;
 }
 
 export interface LessonFormData {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { getCourse, getLessonsProgress, completeLesson, updateCourse, deleteCourse, createLesson, updateLesson, deleteLesson } from '@/lib/api/courses';
+import { getCourse, getLessonsProgress, completeLesson, updateCourse, deleteCourse, createLesson, updateLesson, deleteLesson, sendCourseNotification } from '@/lib/api/courses';
 import { getSectors } from '@/lib/api/sectors';
 import { getTags } from '@/lib/api/tags';
 import type { Course, Lesson, LessonProgress, CourseFormData } from '@/types/course.types';
@@ -57,7 +57,15 @@ import {
   Settings,
   Users,
   BarChart2,
+  Globe,
+  Lock,
+  CalendarDays,
+  Bell,
+  Send,
+  AlertCircle,
 } from 'lucide-react';
+import { MultiSelect } from '@/components/ui/multi-select';
+import { Separator } from '@/components/ui/separator';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { canEdit, canDelete, canManageAccess } from '@/lib/permissions';
@@ -101,7 +109,13 @@ export default function CoursePage() {
     workload_hours: 0,
     exam_duration_minutes: 60,
     is_active: true,
+    available_for_all_sectors: true,
+    allowed_sectors: [],
+    available_from: null,
+    available_until: null,
+    send_email_notification: false,
   });
+  const [isSendingNotification, setIsSendingNotification] = useState(false);
 
   // Estados para gestão de aulas
   const [showLessonDialog, setShowLessonDialog] = useState(false);
@@ -247,6 +261,14 @@ export default function CoursePage() {
   };
 
   // Funções de gerenciamento do curso
+  // Converte ISO UTC para valor de datetime-local (local do browser)
+  const toLocalDatetimeInput = (iso: string | null): string => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const offset = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - offset).toISOString().slice(0, 16);
+  };
+
   const handleOpenEditDialog = () => {
     if (state.course) {
       setEditForm({
@@ -259,8 +281,26 @@ export default function CoursePage() {
         workload_hours: state.course.workload_hours,
         exam_duration_minutes: state.course.exam_duration_minutes,
         is_active: state.course.is_active,
+        available_for_all_sectors: state.course.available_for_all_sectors ?? true,
+        allowed_sectors: (state.course.allowed_sectors ?? []).map(String),
+        available_from: toLocalDatetimeInput(state.course.available_from),
+        available_until: toLocalDatetimeInput(state.course.available_until),
+        send_email_notification: state.course.send_email_notification ?? false,
       });
       setShowEditDialog(true);
+    }
+  };
+
+  const handleSendNotification = async () => {
+    if (!state.course) return;
+    setIsSendingNotification(true);
+    try {
+      const result = await sendCourseNotification(state.course.id.toString());
+      toast({ title: 'Notificação enviada', description: result.detail });
+    } catch (error: any) {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsSendingNotification(false);
     }
   };
 
@@ -270,7 +310,20 @@ export default function CoursePage() {
     try {
       setIsSubmitting(true);
 
-      const updated = await updateCourse(state.course.id.toString(), editForm);
+      // Converter datetime-local → ISO (null se vazio)
+      const fromLocalInput = (v: string | null | undefined): string | null => {
+        if (!v) return null;
+        return new Date(v).toISOString();
+      };
+
+      const payload: CourseFormData = {
+        ...editForm,
+        available_from: fromLocalInput(editForm.available_from),
+        available_until: fromLocalInput(editForm.available_until),
+        allowed_sectors: editForm.available_for_all_sectors ? [] : editForm.allowed_sectors,
+      };
+
+      const updated = await updateCourse(state.course.id.toString(), payload);
 
       setState((prev) => ({
         ...prev,
@@ -449,7 +502,27 @@ export default function CoursePage() {
           {/* Informações do Curso - Completas */}
           <div className="space-y-4">
             <div className="flex items-start justify-between gap-4">
-              <h1 className="text-3xl font-bold flex-1">{state.course.name}</h1>
+              <div className="flex-1">
+                <h1 className="text-3xl font-bold">{state.course.name}</h1>
+                {state.course.availability_status && state.course.availability_status !== 'always' && (
+                  <span className={cn(
+                    'mt-1.5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium border',
+                    state.course.availability_status === 'scheduled' && 'bg-amber-500/10 text-amber-500 border-amber-500/30',
+                    state.course.availability_status === 'active' && 'bg-green-500/10 text-green-500 border-green-500/30',
+                    state.course.availability_status === 'expired' && 'bg-zinc-500/10 text-zinc-400 border-zinc-500/30',
+                  )}>
+                    <span className={cn(
+                      'h-1.5 w-1.5 rounded-full',
+                      state.course.availability_status === 'scheduled' && 'bg-amber-400',
+                      state.course.availability_status === 'active' && 'bg-green-400',
+                      state.course.availability_status === 'expired' && 'bg-zinc-500',
+                    )} />
+                    {state.course.availability_status === 'scheduled' && 'Agendado'}
+                    {state.course.availability_status === 'active' && 'Disponível'}
+                    {state.course.availability_status === 'expired' && 'Encerrado'}
+                  </span>
+                )}
+              </div>
 
               {/* Botões de Gerenciamento */}
               {(canEdit(state.course) || canDelete(state.course) || canManageAccess(state.course)) && (
@@ -787,6 +860,169 @@ export default function CoursePage() {
                 checked={editForm.is_active}
                 onCheckedChange={(checked) => setEditForm({ ...editForm, is_active: checked })}
               />
+            </div>
+
+            {/* ── Configurações de Disponibilidade ─────────────────── */}
+            <Separator />
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                <h3 className="font-semibold text-sm">Configurações de Disponibilidade</h3>
+              </div>
+
+              {/* Público-alvo */}
+              <div className="rounded-lg border p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Globe className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Público-alvo</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="all-sectors">Todos os setores</Label>
+                    <p className="text-xs text-muted-foreground">
+                      {editForm.available_for_all_sectors
+                        ? 'Visível para todos os usuários'
+                        : 'Apenas setores selecionados'}
+                    </p>
+                  </div>
+                  <Switch
+                    id="all-sectors"
+                    checked={editForm.available_for_all_sectors}
+                    onCheckedChange={(checked) =>
+                      setEditForm({ ...editForm, available_for_all_sectors: checked, allowed_sectors: [] })
+                    }
+                  />
+                </div>
+
+                {!editForm.available_for_all_sectors && (
+                  <div className="space-y-2 pt-1">
+                    <div className="flex items-center gap-1.5">
+                      <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                      <Label className="text-xs">Setores autorizados</Label>
+                    </div>
+                    <MultiSelect
+                      options={sectors.map((s) => ({ id: s.id.toString(), name: s.name }))}
+                      selected={editForm.allowed_sectors}
+                      onChange={(vals) => setEditForm({ ...editForm, allowed_sectors: vals })}
+                      placeholder="Selecione os setores..."
+                      emptyText="Nenhum setor encontrado"
+                    />
+                    {editForm.allowed_sectors.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        {editForm.allowed_sectors.length} setor(es) selecionado(s)
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Período de disponibilidade */}
+              <div className="rounded-lg border p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Período de disponibilidade</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="has-period">Definir período</Label>
+                    <p className="text-xs text-muted-foreground">
+                      {editForm.available_from || editForm.available_until
+                        ? 'Período definido'
+                        : 'Sem limite de tempo'}
+                    </p>
+                  </div>
+                  <Switch
+                    id="has-period"
+                    checked={!!(editForm.available_from || editForm.available_until)}
+                    onCheckedChange={(checked) => {
+                      if (!checked) setEditForm({ ...editForm, available_from: null, available_until: null });
+                      else setEditForm({ ...editForm, available_from: editForm.available_from || '' });
+                    }}
+                  />
+                </div>
+
+                {(editForm.available_from || editForm.available_until) && (
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Início</Label>
+                      <Input
+                        type="datetime-local"
+                        value={editForm.available_from || ''}
+                        onChange={(e) => setEditForm({ ...editForm, available_from: e.target.value || null })}
+                        className="text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Término</Label>
+                      <Input
+                        type="datetime-local"
+                        value={editForm.available_until || ''}
+                        onChange={(e) => setEditForm({ ...editForm, available_until: e.target.value || null })}
+                        min={editForm.available_from || undefined}
+                        className="text-xs"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Resumo visual do status */}
+                {state.course && state.course.availability_status !== 'always' && (
+                  <div className={cn(
+                    'flex items-center gap-2 rounded-md px-3 py-2 text-xs',
+                    state.course.availability_status === 'scheduled' && 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400',
+                    state.course.availability_status === 'active' && 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400',
+                    state.course.availability_status === 'expired' && 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
+                  )}>
+                    <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                    {state.course.availability_status === 'scheduled' && `Agendado para ${new Date(state.course.available_from!).toLocaleString('pt-BR')}`}
+                    {state.course.availability_status === 'active' && 'Disponível agora'}
+                    {state.course.availability_status === 'expired' && 'Período encerrado'}
+                  </div>
+                )}
+              </div>
+
+              {/* Notificação por e-mail */}
+              {canManageAccess(state.course) && (
+                <div className="rounded-lg border p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Bell className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Notificação por e-mail</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="send-email">Ativar notificação</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Notificar usuários elegíveis ao salvar
+                      </p>
+                    </div>
+                    <Switch
+                      id="send-email"
+                      checked={editForm.send_email_notification}
+                      onCheckedChange={(checked) =>
+                        setEditForm({ ...editForm, send_email_notification: checked })
+                      }
+                    />
+                  </div>
+
+                  {state.course?.notification_sent_at && (
+                    <p className="text-xs text-muted-foreground">
+                      Última notificação: {new Date(state.course.notification_sent_at).toLocaleString('pt-BR')}
+                    </p>
+                  )}
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={handleSendNotification}
+                    disabled={isSendingNotification}
+                  >
+                    <Send className="mr-2 h-3.5 w-3.5" />
+                    {isSendingNotification ? 'Enviando...' : 'Enviar notificação agora'}
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
 

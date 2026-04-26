@@ -108,10 +108,12 @@ class CourseSerializer(serializers.ModelSerializer):
     """Serializer para Curso"""
     sector_detail = SectorSerializer(source='sector', read_only=True)
     tags_detail = TagSerializer(many=True, source='tags', read_only=True)
+    allowed_sectors_detail = SectorSerializer(many=True, source='allowed_sectors', read_only=True)
     total_lessons = serializers.SerializerMethodField()
     lessons = LessonSerializer(many=True, read_only=True)
     questions = QuestionSerializer(many=True, read_only=True)
     user_permissions = serializers.SerializerMethodField()
+    availability_status = serializers.SerializerMethodField()
 
     class Meta:
         model = Course
@@ -119,14 +121,23 @@ class CourseSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'sector', 'sector_detail',
             'tags', 'tags_detail', 'has_final_exam', 'passing_score',
             'workload_hours', 'exam_duration_minutes', 'is_active', 'total_lessons', 'lessons', 'questions',
+            'available_for_all_sectors', 'allowed_sectors', 'allowed_sectors_detail',
+            'available_from', 'available_until',
+            'send_email_notification', 'notification_sent_at',
+            'availability_status',
             'created_at', 'updated_at', 'created_by', 'updated_by',
             'user_permissions',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'total_lessons', 'user_permissions']
+        read_only_fields = [
+            'id', 'created_at', 'updated_at', 'total_lessons',
+            'user_permissions', 'notification_sent_at', 'availability_status',
+        ]
 
     def get_total_lessons(self, obj):
-        """Retorna o total de aulas ativas"""
         return obj.get_total_lessons()
+
+    def get_availability_status(self, obj):
+        return obj.get_availability_status()
 
     def get_user_permissions(self, obj):
         request = self.context.get('request')
@@ -134,9 +145,19 @@ class CourseSerializer(serializers.ModelSerializer):
             return get_user_permissions(request.user, obj)
         return {"can_edit": False, "can_delete": False, "can_manage_access": False}
 
+    def validate(self, data):
+        available_from = data.get('available_from')
+        available_until = data.get('available_until')
+        if available_from and available_until and available_until <= available_from:
+            raise serializers.ValidationError(
+                {'available_until': 'A data de término deve ser posterior à data de início.'}
+            )
+        return data
+
     def create(self, validated_data):
         """Set created_by and handle many-to-many"""
         tags = validated_data.pop('tags', [])
+        allowed_sectors = validated_data.pop('allowed_sectors', [])
 
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
@@ -148,12 +169,15 @@ class CourseSerializer(serializers.ModelSerializer):
 
         if tags:
             course.tags.set(tags)
+        if allowed_sectors:
+            course.allowed_sectors.set(allowed_sectors)
 
         return course
 
     def update(self, instance, validated_data):
         """Set updated_by and handle many-to-many"""
         tags = validated_data.pop('tags', None)
+        allowed_sectors = validated_data.pop('allowed_sectors', None)
 
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
@@ -165,6 +189,8 @@ class CourseSerializer(serializers.ModelSerializer):
 
         if tags is not None:
             instance.tags.set(tags)
+        if allowed_sectors is not None:
+            instance.allowed_sectors.set(allowed_sectors)
 
         return instance
 
@@ -176,18 +202,22 @@ class CourseListSerializer(serializers.ModelSerializer):
     total_lessons = serializers.SerializerMethodField()
     first_lesson_video_id = serializers.SerializerMethodField()
     user_progress = serializers.SerializerMethodField()
+    availability_status = serializers.SerializerMethodField()
 
     class Meta:
         model = Course
         fields = [
             'id', 'name', 'description', 'sector', 'sector_detail',
             'tags', 'tags_detail', 'total_lessons', 'first_lesson_video_id',
-            'user_progress', 'workload_hours', 'is_active'
+            'user_progress', 'workload_hours', 'is_active',
+            'available_from', 'available_until', 'availability_status',
         ]
 
     def get_total_lessons(self, obj):
-        """Retorna o total de aulas ativas"""
         return obj.get_total_lessons()
+
+    def get_availability_status(self, obj):
+        return obj.get_availability_status()
 
     def get_first_lesson_video_id(self, obj):
         """Retorna o ID do vídeo da primeira aula para thumbnail"""

@@ -26,6 +26,36 @@ class Course(models.Model):
     created_by = models.CharField(max_length=150, null=True, blank=True, verbose_name='Criado por')
     updated_by = models.CharField(max_length=150, null=True, blank=True, verbose_name='Atualizado por')
 
+    # ── Disponibilidade ─────────────────────────────────────
+    available_for_all_sectors = models.BooleanField(
+        default=True,
+        verbose_name='Disponível para todos os setores',
+    )
+    allowed_sectors = models.ManyToManyField(
+        'sectors.Sector',
+        blank=True,
+        related_name='allowed_courses',
+        verbose_name='Setores autorizados',
+    )
+    available_from = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Disponível a partir de',
+    )
+    available_until = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Disponível até',
+    )
+
+    # ── Notificação ──────────────────────────────────────────
+    send_email_notification = models.BooleanField(
+        default=False,
+        verbose_name='Notificar por e-mail',
+    )
+    notification_sent_at = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Notificação enviada em',
+    )
+
     # ── Controle de acesso ──────────────────────────────────
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -48,6 +78,18 @@ class Course(models.Model):
 
     def __str__(self):
         return self.name
+
+    def get_availability_status(self):
+        """Retorna o status de disponibilidade do curso."""
+        from django.utils import timezone as tz
+        now = tz.now()
+        if self.available_from and now < self.available_from:
+            return 'scheduled'
+        if self.available_until and now > self.available_until:
+            return 'expired'
+        if self.available_from or self.available_until:
+            return 'active'
+        return 'always'
 
     def get_total_lessons(self):
         """Retorna o total de aulas do curso"""

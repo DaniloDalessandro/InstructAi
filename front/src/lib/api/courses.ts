@@ -313,6 +313,24 @@ export async function submitExam(courseId: string, submission: ExamSubmission): 
   return response.json();
 }
 
+// ==================== NOTIFICATIONS ====================
+
+export async function sendCourseNotification(courseId: string): Promise<{
+  detail: string;
+  recipient_count: number;
+  scheduled: boolean;
+  scheduled_for: string | null;
+}> {
+  const response = await authFetch(`${BASE_URL}/courses/${courseId}/send_notification/`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.detail || 'Erro ao enviar notificação');
+  }
+  return response.json();
+}
+
 // ==================== PARTICIPANTS ====================
 
 export async function getCourseParticipants(
