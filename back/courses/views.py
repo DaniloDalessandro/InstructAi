@@ -10,7 +10,7 @@ from .serializers import (
     QuestionSerializer, QuestionPublicSerializer,
     CourseProgressSerializer, LessonProgressSerializer, CertificateSerializer
 )
-from .permissions import IsOwnerOrReadOnly
+from access.permissions import ContentPermission, CanManageAccess
 
 
 class CourseViewSet(viewsets.ModelViewSet):
@@ -18,7 +18,7 @@ class CourseViewSet(viewsets.ModelViewSet):
     ViewSet for Course model
     """
     queryset = Course.objects.all().prefetch_related('tags', 'lessons', 'questions')
-    permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
+    permission_classes = [IsAuthenticated, ContentPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['is_active', 'sector', 'tags', 'has_final_exam']
     search_fields = ['name', 'description']
@@ -44,6 +44,57 @@ class CourseViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(is_active=False)
 
         return queryset.order_by('-created_at')
+
+    def perform_create(self, serializer):
+        from access.models import log_action
+        instance = serializer.save(owner=self.request.user)
+        log_action(self.request.user, 'create', 'course', instance, request=self.request)
+
+    def perform_update(self, serializer):
+        from access.models import log_action
+        instance = serializer.save()
+        log_action(self.request.user, 'update', 'course', instance, request=self.request)
+
+    def perform_destroy(self, instance):
+        from access.models import log_action
+        log_action(self.request.user, 'delete', 'course', instance, request=self.request)
+        instance.delete()
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, CanManageAccess])
+    def share(self, request, pk=None):
+        """
+        Gerencia administradores delegados.
+        Body: { "add": [user_id, ...], "remove": [user_id, ...] }
+        """
+        from django.contrib.auth import get_user_model
+        from access.models import log_action
+
+        course = self.get_object()
+        User = get_user_model()
+
+        add_ids = request.data.get('add', [])
+        remove_ids = request.data.get('remove', [])
+
+        for uid in add_ids:
+            try:
+                user = User.objects.get(pk=uid)
+                course.shared_admins.add(user)
+                log_action(request.user, 'grant_admin', 'course', course,
+                           {'target_user': user.email}, request)
+            except User.DoesNotExist:
+                pass
+
+        for uid in remove_ids:
+            try:
+                user = User.objects.get(pk=uid)
+                course.shared_admins.remove(user)
+                log_action(request.user, 'revoke_admin', 'course', course,
+                           {'target_user': user.email}, request)
+            except User.DoesNotExist:
+                pass
+
+        admins = course.shared_admins.values('id', 'email', 'name')
+        return Response({'shared_admins': list(admins)})
 
     @action(detail=True, methods=['get'])
     def progress(self, request, pk=None):
@@ -158,7 +209,7 @@ class LessonViewSet(viewsets.ModelViewSet):
     """
     queryset = Lesson.objects.all().select_related('course')
     serializer_class = LessonSerializer
-    permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
+    permission_classes = [IsAuthenticated, ContentPermission]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ['course', 'is_active']
     ordering_fields = ['order', 'created_at']
@@ -229,7 +280,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
     """
     queryset = Question.objects.all().select_related('course')
     serializer_class = QuestionSerializer
-    permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
+    permission_classes = [IsAuthenticated, ContentPermission]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ['course']
     ordering_fields = ['order', 'created_at']

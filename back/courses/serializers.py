@@ -2,6 +2,7 @@ from rest_framework import serializers
 from .models import Course, Lesson, Question, CourseProgress, LessonProgress, Certificate
 from sectors.serializers import SectorSerializer
 from tags.serializers import TagSerializer
+from access.permissions import get_user_permissions
 
 
 class LessonSerializer(serializers.ModelSerializer):
@@ -110,6 +111,7 @@ class CourseSerializer(serializers.ModelSerializer):
     total_lessons = serializers.SerializerMethodField()
     lessons = LessonSerializer(many=True, read_only=True)
     questions = QuestionSerializer(many=True, read_only=True)
+    user_permissions = serializers.SerializerMethodField()
 
     class Meta:
         model = Course
@@ -117,13 +119,20 @@ class CourseSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'sector', 'sector_detail',
             'tags', 'tags_detail', 'has_final_exam', 'passing_score',
             'workload_hours', 'exam_duration_minutes', 'is_active', 'total_lessons', 'lessons', 'questions',
-            'created_at', 'updated_at', 'created_by', 'updated_by'
+            'created_at', 'updated_at', 'created_by', 'updated_by',
+            'user_permissions',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'total_lessons']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'total_lessons', 'user_permissions']
 
     def get_total_lessons(self, obj):
         """Retorna o total de aulas ativas"""
         return obj.get_total_lessons()
+
+    def get_user_permissions(self, obj):
+        request = self.context.get('request')
+        if request and request.user:
+            return get_user_permissions(request.user, obj)
+        return {"can_edit": False, "can_delete": False, "can_manage_access": False}
 
     def create(self, validated_data):
         """Set created_by and handle many-to-many"""

@@ -58,8 +58,7 @@ import {
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { useAuthContext } from '@/contexts/AuthContext';
-import { canEditOrDelete } from '@/lib/permissions';
+import { canEdit, canDelete } from '@/lib/permissions';
 
 interface CourseViewState {
   course: Course | null;
@@ -73,7 +72,6 @@ export default function CoursePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const courseId = params.id as string;
-  const { user } = useAuthContext();
 
   const [state, setState] = useState<CourseViewState>({
     course: null,
@@ -448,9 +446,10 @@ export default function CoursePage() {
             <div className="flex items-start justify-between gap-4">
               <h1 className="text-3xl font-bold flex-1">{state.course.name}</h1>
 
-              {/* Botões de Gerenciamento - Apenas para criador */}
-              {canEditOrDelete(state.course, user?.email) && (
+              {/* Botões de Gerenciamento */}
+              {(canEdit(state.course) || canDelete(state.course)) && (
                 <div className="flex gap-2">
+                  {canEdit(state.course) && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -459,6 +458,8 @@ export default function CoursePage() {
                     <Edit className="mr-2 h-4 w-4" />
                     Editar
                   </Button>
+                  )}
+                  {canDelete(state.course) && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -468,6 +469,7 @@ export default function CoursePage() {
                     <Trash2 className="mr-2 h-4 w-4" />
                     Excluir
                   </Button>
+                  )}
                 </div>
               )}
             </div>
@@ -631,7 +633,7 @@ export default function CoursePage() {
               lessonsProgress={state.lessonsProgress}
               currentLessonIndex={currentLessonIndex}
               onLessonSelect={handleLessonSelect}
-              canManage={canEditOrDelete(state.course, user?.email)}
+              canManage={canEdit(state.course)}
               onAddLesson={() => handleOpenLessonDialog()}
               onEditLesson={handleOpenLessonDialog}
               onDeleteLesson={(lesson) => {

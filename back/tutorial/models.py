@@ -39,6 +39,14 @@ class Tutorial(models.Model):
     created_at = models.DateTimeField(default=timezone.now, verbose_name="Criado em")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
 
+    # ── Controle de acesso ──────────────────────────────────
+    shared_admins = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='admin_tutorials',
+        verbose_name='Administradores Delegados',
+    )
+
     class Meta:
         verbose_name = "Tutorial"
         verbose_name_plural = "Tutoriais"

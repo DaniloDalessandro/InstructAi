@@ -14,7 +14,7 @@ from .serializers import (
     TutorialStepCreateUpdateSerializer,
     TutorialMediaSerializer,
 )
-from .permissions import IsOwnerOrReadOnly, IsOwnerOrStaff
+from access.permissions import ContentPermission, CanManageAccess, ChildObjectPermission
 
 
 class TutorialViewSet(viewsets.ModelViewSet):
@@ -28,7 +28,7 @@ class TutorialViewSet(viewsets.ModelViewSet):
     partial_update: Atualiza parcialmente (owner ou staff)
     destroy: Remove tutorial (owner ou staff)
     """
-    permission_classes = [IsOwnerOrReadOnly]
+    permission_classes = [IsAuthenticated, ContentPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['sector', 'is_active']
     search_fields = ['title', 'description']
@@ -40,8 +40,8 @@ class TutorialViewSet(viewsets.ModelViewSet):
         queryset = Tutorial.objects.select_related('sector', 'created_by').prefetch_related('tags')
         queryset = queryset.annotate(step_count=Count('steps', distinct=True))
 
-        # Usuários não autenticados ou sem staff veem apenas tutoriais ativos
-        if not self.request.user.is_authenticated or not self.request.user.is_staff:
+        # Authenticated users that are not staff see only active tutorials
+        if not self.request.user.is_staff:
             queryset = queryset.filter(is_active=True)
 
         # Filtro OR de tags: retorna tutoriais que possuam qualquer uma das tags selecionadas
@@ -60,13 +60,64 @@ class TutorialViewSet(viewsets.ModelViewSet):
             return TutorialCreateUpdateSerializer
         return TutorialDetailSerializer
 
+    def perform_create(self, serializer):
+        from access.models import log_action
+        instance = serializer.save()
+        log_action(self.request.user, 'create', 'tutorial', instance, request=self.request)
+
+    def perform_update(self, serializer):
+        from access.models import log_action
+        instance = serializer.save()
+        log_action(self.request.user, 'update', 'tutorial', instance, request=self.request)
+
+    def perform_destroy(self, instance):
+        from access.models import log_action
+        log_action(self.request.user, 'delete', 'tutorial', instance, request=self.request)
+        instance.delete()
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, CanManageAccess])
+    def share(self, request, pk=None):
+        """
+        Gerencia administradores delegados.
+        Body: { "add": [user_id, ...], "remove": [user_id, ...] }
+        """
+        from django.contrib.auth import get_user_model
+        from access.models import log_action
+
+        tutorial = self.get_object()
+        User = get_user_model()
+
+        add_ids = request.data.get('add', [])
+        remove_ids = request.data.get('remove', [])
+
+        for uid in add_ids:
+            try:
+                user = User.objects.get(pk=uid)
+                tutorial.shared_admins.add(user)
+                log_action(request.user, 'grant_admin', 'tutorial', tutorial,
+                           {'target_user': user.email}, request)
+            except User.DoesNotExist:
+                pass
+
+        for uid in remove_ids:
+            try:
+                user = User.objects.get(pk=uid)
+                tutorial.shared_admins.remove(user)
+                log_action(request.user, 'revoke_admin', 'tutorial', tutorial,
+                           {'target_user': user.email}, request)
+            except User.DoesNotExist:
+                pass
+
+        admins = tutorial.shared_admins.values('id', 'email', 'name')
+        return Response({'shared_admins': list(admins)})
+
 
 class TutorialStepViewSet(viewsets.ModelViewSet):
     """
     ViewSet para o modelo TutorialStep.
     Permite criação, leitura, atualização e remoção de passos de tutoriais.
     """
-    permission_classes = [IsAuthenticated, IsOwnerOrStaff]
+    permission_classes = [IsAuthenticated, ChildObjectPermission]
     queryset = TutorialStep.objects.select_related('tutorial').prefetch_related('media').all()
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ['order', 'created_at']
@@ -135,7 +186,7 @@ class TutorialMediaViewSet(viewsets.ModelViewSet):
     ViewSet para o modelo TutorialMedia.
     Permite criação, leitura, atualização e remoção de mídias dos passos.
     """
-    permission_classes = [IsAuthenticated, IsOwnerOrStaff]
+    permission_classes = [IsAuthenticated, ChildObjectPermission]
     queryset = TutorialMedia.objects.select_related('step__tutorial').all()
     serializer_class = TutorialMediaSerializer
     filter_backends = [filters.OrderingFilter]

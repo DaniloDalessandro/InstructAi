@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "courses",
     "agent",
     "documents",
+    "access",
     # Should be at the bottom to auto-delete files
     "django_cleanup.apps.CleanupConfig",
 ]

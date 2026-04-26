@@ -394,20 +394,24 @@ function ManualGalleryCard({
         >
           <ExternalLink className="w-3 h-3" />
         </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); onEdit() }}
-          className="w-7 h-7 grid place-items-center rounded-md bg-background/90 backdrop-blur border shadow-sm hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors"
-          title="Editar"
-        >
-          <Pencil className="w-3 h-3" />
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); onDelete() }}
-          className="w-7 h-7 grid place-items-center rounded-md bg-background/90 backdrop-blur border shadow-sm hover:bg-destructive hover:text-destructive-foreground hover:border-destructive transition-colors"
-          title="Inativar"
-        >
-          <Trash2 className="w-3 h-3" />
-        </button>
+        {m.user_permissions?.can_edit && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onEdit() }}
+            className="w-7 h-7 grid place-items-center rounded-md bg-background/90 backdrop-blur border shadow-sm hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors"
+            title="Editar"
+          >
+            <Pencil className="w-3 h-3" />
+          </button>
+        )}
+        {m.user_permissions?.can_delete && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete() }}
+            className="w-7 h-7 grid place-items-center rounded-md bg-background/90 backdrop-blur border shadow-sm hover:bg-destructive hover:text-destructive-foreground hover:border-destructive transition-colors"
+            title="Inativar"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
+        )}
       </div>
     </article>
   )
@@ -508,20 +512,24 @@ function ManualListView({
               >
                 <Eye className="w-3.5 h-3.5" />
               </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); onEdit(m) }}
-                className="w-7 h-7 grid place-items-center rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                title="Editar"
-              >
-                <Pencil className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); onDelete(m) }}
-                className="w-7 h-7 grid place-items-center rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                title="Inativar"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              {m.user_permissions?.can_edit && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onEdit(m) }}
+                  className="w-7 h-7 grid place-items-center rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  title="Editar"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {m.user_permissions?.can_delete && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDelete(m) }}
+                  className="w-7 h-7 grid place-items-center rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                  title="Inativar"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           </div>
         )

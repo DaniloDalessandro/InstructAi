@@ -2,6 +2,7 @@ from rest_framework import serializers
 from .models import Manual
 from tags.serializers import TagSerializer
 from sectors.serializers import SectorSerializer
+from access.permissions import get_user_permissions
 
 
 class ManualSerializer(serializers.ModelSerializer):
@@ -9,15 +10,23 @@ class ManualSerializer(serializers.ModelSerializer):
     sectors_detail = SectorSerializer(many=True, source='sectors', read_only=True)
     tags_detail = TagSerializer(many=True, source='tags', read_only=True)
     pdf_url = serializers.SerializerMethodField()
+    user_permissions = serializers.SerializerMethodField()
 
     class Meta:
         model = Manual
         fields = [
             'id', 'name', 'pdf_file', 'pdf_url', 'sectors', 'sectors_detail',
             'tags', 'tags_detail', 'is_active',
-            'created_at', 'updated_at', 'created_by', 'updated_by'
+            'created_at', 'updated_at', 'created_by', 'updated_by',
+            'user_permissions',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'pdf_url']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'pdf_url', 'user_permissions']
+
+    def get_user_permissions(self, obj):
+        request = self.context.get('request')
+        if request and request.user:
+            return get_user_permissions(request.user, obj)
+        return {"can_edit": False, "can_delete": False, "can_manage_access": False}
 
     def get_pdf_url(self, obj):
         """Retorna a URL completa do arquivo PDF"""

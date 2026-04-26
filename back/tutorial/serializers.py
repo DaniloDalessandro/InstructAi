@@ -2,6 +2,7 @@ from rest_framework import serializers
 from .models import Tutorial, TutorialStep, TutorialMedia
 from sectors.serializers import SectorSerializer
 from tags.serializers import TagSerializer
+from access.permissions import get_user_permissions
 
 
 class TutorialMediaSerializer(serializers.ModelSerializer):
@@ -50,15 +51,23 @@ class TutorialListSerializer(serializers.ModelSerializer):
     sector_detail = SectorSerializer(source='sector', read_only=True)
     tags_detail = TagSerializer(many=True, source='tags', read_only=True)
     step_count = serializers.IntegerField(read_only=True)
+    user_permissions = serializers.SerializerMethodField()
 
     class Meta:
         model = Tutorial
         fields = [
             'id', 'title', 'description', 'sector', 'sector_detail',
             'tags', 'tags_detail', 'created_by', 'created_by_name',
-            'step_count', 'is_active', 'created_at', 'updated_at'
+            'step_count', 'is_active', 'created_at', 'updated_at',
+            'user_permissions',
         ]
-        read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_by', 'created_at', 'updated_at', 'user_permissions']
+
+    def get_user_permissions(self, obj):
+        request = self.context.get('request')
+        if request and request.user:
+            return get_user_permissions(request.user, obj)
+        return {"can_edit": False, "can_delete": False, "can_manage_access": False}
 
 
 class TutorialDetailSerializer(serializers.ModelSerializer):
@@ -69,6 +78,7 @@ class TutorialDetailSerializer(serializers.ModelSerializer):
     tags_detail = TagSerializer(many=True, source='tags', read_only=True)
     steps = TutorialStepSerializer(many=True, read_only=True)
     step_count = serializers.IntegerField(read_only=True)
+    user_permissions = serializers.SerializerMethodField()
 
     class Meta:
         model = Tutorial
@@ -76,9 +86,16 @@ class TutorialDetailSerializer(serializers.ModelSerializer):
             'id', 'title', 'description', 'sector', 'sector_detail',
             'tags', 'tags_detail', 'created_by', 'created_by_name',
             'created_by_email', 'updated_by', 'steps', 'step_count',
-            'is_active', 'created_at', 'updated_at'
+            'is_active', 'created_at', 'updated_at',
+            'user_permissions',
         ]
-        read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_by', 'created_at', 'updated_at', 'user_permissions']
+
+    def get_user_permissions(self, obj):
+        request = self.context.get('request')
+        if request and request.user:
+            return get_user_permissions(request.user, obj)
+        return {"can_edit": False, "can_delete": False, "can_manage_access": False}
 
 
 class TutorialCreateUpdateSerializer(serializers.ModelSerializer):

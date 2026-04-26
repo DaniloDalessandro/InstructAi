@@ -9,7 +9,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { BookOpen, Calendar, User, MoreVertical, Pencil, Trash2 } from 'lucide-react';
-import { useAuthContext } from '@/contexts/AuthContext';
 import type { TutorialListItem } from '@/types/tutorial.types';
 
 interface TutorialCardProps {
@@ -28,10 +27,8 @@ const clamp2: CSSProperties = {
 };
 
 export function TutorialCard({ tutorial, onView, onEdit, onDelete }: TutorialCardProps) {
-  const { user } = useAuthContext();
-
-  const canManage =
-    String(user?.id) === String(tutorial.created_by) || user?.is_superuser;
+  const canManage = tutorial.user_permissions?.can_edit ?? false;
+  const canRemove = tutorial.user_permissions?.can_delete ?? false;
 
   const formatDate = (dateString: string) =>
     new Date(dateString).toLocaleDateString('pt-BR', {
@@ -67,7 +64,7 @@ export function TutorialCard({ tutorial, onView, onEdit, onDelete }: TutorialCar
               {tutorial.is_active ? 'Ativo' : 'Inativo'}
             </Badge>
 
-            {canManage && (
+            {(canManage || canRemove) && (
               <DropdownMenu>
                 <DropdownMenuTrigger
                   onClick={(e) => e.stopPropagation()}
@@ -76,20 +73,24 @@ export function TutorialCard({ tutorial, onView, onEdit, onDelete }: TutorialCar
                   <MoreVertical className="h-4 w-4 text-muted-foreground" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                  <DropdownMenuItem
-                    onClick={(e) => { e.stopPropagation(); onEdit(tutorial); }}
-                    className="gap-2 cursor-pointer"
-                  >
-                    <Pencil className="h-4 w-4" />
-                    Editar
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={(e) => { e.stopPropagation(); onDelete(tutorial); }}
-                    className="gap-2 cursor-pointer text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Excluir
-                  </DropdownMenuItem>
+                  {canManage && (
+                    <DropdownMenuItem
+                      onClick={(e) => { e.stopPropagation(); onEdit(tutorial); }}
+                      className="gap-2 cursor-pointer"
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Editar
+                    </DropdownMenuItem>
+                  )}
+                  {canRemove && (
+                    <DropdownMenuItem
+                      onClick={(e) => { e.stopPropagation(); onDelete(tutorial); }}
+                      className="gap-2 cursor-pointer text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Excluir
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}

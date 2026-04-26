@@ -9,13 +9,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, Edit, Download, Loader2, BookOpen } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { useAuthContext } from '@/contexts/AuthContext';
-import { canEditOrDelete } from '@/lib/permissions';
+import { canEdit } from '@/lib/permissions';
 
 export default function TutorialViewPage() {
   const params = useParams();
   const router = useRouter();
-  const { user } = useAuthContext();
   const tutorialId = params.id as string;
 
   const [tutorial, setTutorial] = useState<Tutorial | null>(null);
@@ -436,7 +434,7 @@ export default function TutorialViewPage() {
             }
             PDF
           </Button>
-          {canEditOrDelete(tutorial, user?.email) && (
+          {canEdit(tutorial) && (
             <Button size="sm" className="h-8 text-xs" onClick={() => router.push(`/tutoriais/${tutorial.id}/editar`)}>
               <Edit className="mr-1.5 h-3.5 w-3.5" />
               Editar
@@ -469,7 +467,7 @@ export default function TutorialViewPage() {
               <p className="text-base font-semibold">Este tutorial ainda não possui passos</p>
               <p className="text-sm text-muted-foreground mt-1">Adicione o conteúdo clicando em Editar.</p>
             </div>
-            {canEditOrDelete(tutorial, user?.email) && (
+            {canEdit(tutorial) && (
               <Button size="sm" onClick={() => router.push(`/tutoriais/${tutorial.id}/editar`)}>
                 <Edit className="mr-1.5 h-3.5 w-3.5" />
                 Adicionar Passos

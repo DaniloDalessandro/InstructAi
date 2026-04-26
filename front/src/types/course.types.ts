@@ -5,6 +5,12 @@ import type { Tag } from './tag.types';
  * Course Type Definitions
  */
 
+export interface UserPermissions {
+  can_edit: boolean;
+  can_delete: boolean;
+  can_manage_access: boolean;
+}
+
 export interface Course {
   id: string;
   name: string;
@@ -25,6 +31,7 @@ export interface Course {
   updated_at: string;
   created_by: string;
   updated_by: string;
+  user_permissions: UserPermissions;
 }
 
 export interface CourseListItem {

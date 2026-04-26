@@ -1,4 +1,5 @@
 import uuid
+from django.conf import settings
 from django.db import models
 from sectors.models import Sector
 from tags.models import Tag
@@ -24,6 +25,21 @@ class Course(models.Model):
     updated_at = models.DateTimeField(auto_now=True, verbose_name='Atualizado em')
     created_by = models.CharField(max_length=150, null=True, blank=True, verbose_name='Criado por')
     updated_by = models.CharField(max_length=150, null=True, blank=True, verbose_name='Atualizado por')
+
+    # ── Controle de acesso ──────────────────────────────────
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='owned_courses',
+        verbose_name='Proprietário',
+    )
+    shared_admins = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='admin_courses',
+        verbose_name='Administradores Delegados',
+    )
 
     class Meta:
         verbose_name = 'Curso'
