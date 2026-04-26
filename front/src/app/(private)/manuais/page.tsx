@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { ManualFilters, ManualFiltersState } from "@/components/manual/ManualFilters"
 import ManualForm from "@/components/forms/ManualForm"
-import { getManuals, deleteManual } from "@/lib/api/manuals"
+import { getManuals, deleteManual, getSharedAdminsManual, updateSharedAdminsManual } from "@/lib/api/manuals"
 import { toast } from "@/hooks/use-toast"
 import type { Manual, ManualFormData } from "@/types/manual.types"
 import { createManual, updateManual } from "@/lib/api/manuals"
@@ -13,8 +13,9 @@ import {
   Plus, Grid3x3, List, Search,
   FileText, Clock, Pencil, Trash2,
   Eye, CheckCircle2, XCircle, SortAsc, ArrowUpRight,
-  ExternalLink, BookOpen,
+  ExternalLink, BookOpen, Users,
 } from "lucide-react"
+import { ShareAccessDialog } from "@/components/shared/ShareAccessDialog"
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -59,6 +60,7 @@ export default function ManuaisPage() {
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [manualToDelete, setManualToDelete] = useState<Manual | null>(null)
+  const [shareManual, setShareManual] = useState<Manual | null>(null)
 
   const fetchManuals = useCallback(async () => {
     setIsLoading(true)
@@ -218,6 +220,7 @@ export default function ManuaisPage() {
                 onView={() => handleView(m)}
                 onEdit={() => { setSelectedManual(m); setIsFormOpen(true) }}
                 onDelete={() => { setManualToDelete(m); setIsDeleteDialogOpen(true) }}
+                onShare={() => setShareManual(m)}
               />
             ))}
           </div>
@@ -227,6 +230,7 @@ export default function ManuaisPage() {
             onView={handleView}
             onEdit={(m) => { setSelectedManual(m); setIsFormOpen(true) }}
             onDelete={(m) => { setManualToDelete(m); setIsDeleteDialogOpen(true) }}
+            onShare={(m) => setShareManual(m)}
           />
         )}
       </div>
@@ -237,6 +241,16 @@ export default function ManuaisPage() {
         handleClose={() => { setIsFormOpen(false); setSelectedManual(null) }}
         initialData={selectedManual}
         onSubmit={handleSubmit}
+      />
+
+      {/* Share Dialog */}
+      <ShareAccessDialog
+        open={!!shareManual}
+        onClose={() => setShareManual(null)}
+        resourceId={shareManual?.id?.toString() ?? ""}
+        resourceTitle={shareManual?.name ?? ""}
+        getAdmins={getSharedAdminsManual}
+        updateAdmins={updateSharedAdminsManual}
       />
 
       {/* Delete Dialog */}
@@ -264,7 +278,7 @@ export default function ManuaisPage() {
 // Gallery Card
 // ────────────────────────────────────────────────────────────
 function ManualGalleryCard({
-  manual: m, hovered, onHover, onView, onEdit, onDelete,
+  manual: m, hovered, onHover, onView, onEdit, onDelete, onShare,
 }: {
   manual: Manual
   hovered: boolean
@@ -272,6 +286,7 @@ function ManualGalleryCard({
   onView: () => void
   onEdit: () => void
   onDelete: () => void
+  onShare: () => void
 }) {
   const createdDays = Math.round((Date.now() - new Date(m.created_at).getTime()) / 86400000)
   const updatedDays = Math.round((Date.now() - new Date(m.updated_at).getTime()) / 86400000)
@@ -394,6 +409,15 @@ function ManualGalleryCard({
         >
           <ExternalLink className="w-3 h-3" />
         </button>
+        {m.user_permissions?.can_manage_access && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onShare() }}
+            className="w-7 h-7 grid place-items-center rounded-md bg-background/90 backdrop-blur border shadow-sm hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors"
+            title="Gerenciar Acesso"
+          >
+            <Users className="w-3 h-3" />
+          </button>
+        )}
         {m.user_permissions?.can_edit && (
           <button
             onClick={(e) => { e.stopPropagation(); onEdit() }}
@@ -421,12 +445,13 @@ function ManualGalleryCard({
 // List view
 // ────────────────────────────────────────────────────────────
 function ManualListView({
-  manuals, onView, onEdit, onDelete,
+  manuals, onView, onEdit, onDelete, onShare,
 }: {
   manuals: Manual[]
   onView: (m: Manual) => void
   onEdit: (m: Manual) => void
   onDelete: (m: Manual) => void
+  onShare: (m: Manual) => void
 }) {
   return (
     <div className="rounded-2xl border bg-card/80 backdrop-blur overflow-hidden shadow-sm">
@@ -512,6 +537,15 @@ function ManualListView({
               >
                 <Eye className="w-3.5 h-3.5" />
               </button>
+              {m.user_permissions?.can_manage_access && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onShare(m) }}
+                  className="w-7 h-7 grid place-items-center rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  title="Gerenciar Acesso"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                </button>
+              )}
               {m.user_permissions?.can_edit && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onEdit(m) }}

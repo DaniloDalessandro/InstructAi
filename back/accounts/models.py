@@ -34,8 +34,16 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     date_joined = models.DateTimeField(default=timezone.now)
     phone = models.CharField(max_length=20, blank=True, default='')
-    position = models.CharField(max_length=255, blank=True, default='')
+    position = models.CharField(max_length=255, blank=True, default='', verbose_name='Cargo')
     avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)
+    cpf = models.CharField(max_length=14, blank=True, default='', verbose_name='CPF')
+    sector = models.ForeignKey(
+        'sectors.Sector',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='users',
+        verbose_name='Setor',
+    )
 
     objects = CustomUserManager()
 

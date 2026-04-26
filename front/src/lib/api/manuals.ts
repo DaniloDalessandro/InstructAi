@@ -170,3 +170,28 @@ export async function deleteManual(id: string): Promise<void> {
     throw new Error(error.detail || 'Erro ao inativar manual');
   }
 }
+
+// ==================== SHARE / ACCESS ====================
+
+export async function getSharedAdminsManual(id: string): Promise<{ id: number; email: string; name: string }[]> {
+  const response = await authFetch(`${API_URL}/api/v1/manuals/${id}/share/`, { method: 'GET' });
+  if (!response.ok) throw new Error('Erro ao buscar administradores');
+  const data = await response.json();
+  return data.shared_admins;
+}
+
+export async function updateSharedAdminsManual(
+  id: string,
+  payload: { add?: string[]; remove?: string[] }
+): Promise<{ shared_admins: { id: number; email: string; name: string }[]; errors?: string[] }> {
+  const response = await authFetch(`${API_URL}/api/v1/manuals/${id}/share/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.detail || 'Erro ao atualizar acesso');
+  }
+  return response.json();
+}

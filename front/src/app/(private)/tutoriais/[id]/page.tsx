@@ -7,9 +7,11 @@ import type { Tutorial } from '@/types/tutorial.types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, Edit, Download, Loader2, BookOpen } from 'lucide-react';
+import { ChevronLeft, Edit, Download, Loader2, BookOpen, Users } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { canEdit } from '@/lib/permissions';
+import { canEdit, canManageAccess } from '@/lib/permissions';
+import { ShareAccessDialog } from '@/components/shared/ShareAccessDialog';
+import { getSharedAdminsTutorial, updateSharedAdminsTutorial } from '@/lib/api/tutorials';
 
 export default function TutorialViewPage() {
   const params = useParams();
@@ -20,6 +22,7 @@ export default function TutorialViewPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeStep, setActiveStep] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
 
   const stepRefs = useRef<(HTMLDivElement | null)[]>([]);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -434,6 +437,12 @@ export default function TutorialViewPage() {
             }
             PDF
           </Button>
+          {canManageAccess(tutorial) && (
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setShowShareDialog(true)}>
+              <Users className="mr-1.5 h-3.5 w-3.5" />
+              Acesso
+            </Button>
+          )}
           {canEdit(tutorial) && (
             <Button size="sm" className="h-8 text-xs" onClick={() => router.push(`/tutoriais/${tutorial.id}/editar`)}>
               <Edit className="mr-1.5 h-3.5 w-3.5" />
@@ -586,6 +595,14 @@ export default function TutorialViewPage() {
           </div>
         </div>
       )}
+    <ShareAccessDialog
+        open={showShareDialog}
+        onClose={() => setShowShareDialog(false)}
+        resourceId={tutorial?.id?.toString() ?? ""}
+        resourceTitle={tutorial?.title ?? ""}
+        getAdmins={getSharedAdminsTutorial}
+        updateAdmins={updateSharedAdminsTutorial}
+      />
     </div>
   );
 }

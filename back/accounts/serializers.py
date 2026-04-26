@@ -12,11 +12,16 @@ class UserSerializer(serializers.ModelSerializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     avatar_url = serializers.SerializerMethodField()
+    sector_name = serializers.CharField(source='sector.name', read_only=True)
 
     class Meta:
         model = CustomUser
-        fields = ['id', 'email', 'name', 'phone', 'position', 'avatar', 'avatar_url', 'is_superuser', 'date_joined']
-        read_only_fields = ['id', 'email', 'is_superuser', 'date_joined']
+        fields = [
+            'id', 'email', 'name', 'phone', 'position', 'cpf',
+            'sector', 'sector_name', 'avatar', 'avatar_url',
+            'is_superuser', 'date_joined',
+        ]
+        read_only_fields = ['id', 'email', 'is_superuser', 'date_joined', 'sector_name']
 
     def get_avatar_url(self, obj):
         if obj.avatar:

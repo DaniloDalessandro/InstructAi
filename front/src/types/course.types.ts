@@ -186,3 +186,49 @@ export interface LessonListResponse {
   previous: string | null;
   results: Lesson[];
 }
+
+export type ParticipantStatus = 'completed' | 'in_progress' | 'pending';
+
+export interface CourseParticipant {
+  user_id: number;
+  name: string;
+  email: string;
+  cpf: string | null;
+  sector_id: number | null;
+  sector_name: string | null;
+  position: string | null;
+  status: ParticipantStatus;
+  completion_percentage: number;
+  exam_score: number | null;
+  exam_passed: boolean;
+  completed_at: string | null;
+  last_access: string | null;
+}
+
+export interface ParticipantsSummary {
+  total: number;
+  completed: number;
+  in_progress: number;
+  pending: number;
+  completion_percentage: number;
+}
+
+export interface CourseParticipantsResponse {
+  summary: ParticipantsSummary;
+  count: number;
+  total_pages: number;
+  current_page: number;
+  has_next: boolean;
+  has_previous: boolean;
+  results: CourseParticipant[];
+}
+
+export interface ParticipantsFilters {
+  search: string;
+  cpf: string;
+  sector: string;
+  status: 'all' | ParticipantStatus;
+  ordering: 'name' | '-name' | 'recent' | 'pending_first';
+  page: number;
+  page_size: number;
+}

@@ -75,11 +75,11 @@ class TutorialViewSet(viewsets.ModelViewSet):
         log_action(self.request.user, 'delete', 'tutorial', instance, request=self.request)
         instance.delete()
 
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, CanManageAccess])
+    @action(detail=True, methods=['get', 'post'], permission_classes=[IsAuthenticated, CanManageAccess])
     def share(self, request, pk=None):
         """
-        Gerencia administradores delegados.
-        Body: { "add": [user_id, ...], "remove": [user_id, ...] }
+        GET  — lista os administradores delegados.
+        POST — { "add": ["email@..."], "remove": ["email@..."] }
         """
         from django.contrib.auth import get_user_model
         from access.models import log_action
@@ -87,21 +87,26 @@ class TutorialViewSet(viewsets.ModelViewSet):
         tutorial = self.get_object()
         User = get_user_model()
 
-        add_ids = request.data.get('add', [])
-        remove_ids = request.data.get('remove', [])
+        if request.method == 'GET':
+            admins = tutorial.shared_admins.values('id', 'email', 'name')
+            return Response({'shared_admins': list(admins)})
 
-        for uid in add_ids:
+        errors = []
+        for email in request.data.get('add', []):
             try:
-                user = User.objects.get(pk=uid)
+                user = User.objects.get(email=email)
+                if user == tutorial.created_by:
+                    errors.append(f'{email} já é o dono do tutorial.')
+                    continue
                 tutorial.shared_admins.add(user)
                 log_action(request.user, 'grant_admin', 'tutorial', tutorial,
                            {'target_user': user.email}, request)
             except User.DoesNotExist:
-                pass
+                errors.append(f'Usuário {email} não encontrado.')
 
-        for uid in remove_ids:
+        for email in request.data.get('remove', []):
             try:
-                user = User.objects.get(pk=uid)
+                user = User.objects.get(email=email)
                 tutorial.shared_admins.remove(user)
                 log_action(request.user, 'revoke_admin', 'tutorial', tutorial,
                            {'target_user': user.email}, request)
@@ -109,7 +114,10 @@ class TutorialViewSet(viewsets.ModelViewSet):
                 pass
 
         admins = tutorial.shared_admins.values('id', 'email', 'name')
-        return Response({'shared_admins': list(admins)})
+        data = {'shared_admins': list(admins)}
+        if errors:
+            data['errors'] = errors
+        return Response(data)
 
 
 class TutorialStepViewSet(viewsets.ModelViewSet):

@@ -27,7 +27,7 @@ def make_user(email, is_staff=False, is_superuser=False):
 
 def auth(client, user):
     """Obtém token JWT e configura o client."""
-    r = client.post("/api/auth/token/", {"email": user.email, "password": "Test1234!"}, format="json")
+    r = client.post("/api/v1/accounts/token/", {"email": user.email, "password": "Test1234!"}, format="json")
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {r.data['access']}")
 
 
@@ -70,7 +70,7 @@ class ManualPermissionTest(BasePermissionTest):
         try:
             with open(tmp_path, "rb") as f:
                 r = self.client.post(
-                    "/api/manuals/",
+                    "/api/v1/manuals/",
                     {"name": "Manual Teste", "sectors": [self.sector.id], "pdf_file": f},
                     format="multipart",
                 )
@@ -87,61 +87,61 @@ class ManualPermissionTest(BasePermissionTest):
     def test_owner_can_edit(self):
         manual_id = self._create_manual()
         auth(self.client, self.owner)
-        r = self.client.patch(f"/api/manuals/{manual_id}/", {"name": "Editado"}, format="json")
+        r = self.client.patch(f"/api/v1/manuals/{manual_id}/", {"name": "Editado"}, format="json")
         self.assertEqual(r.status_code, status.HTTP_200_OK)
 
     def test_delegated_can_edit(self):
         manual_id = self._create_manual()
         auth(self.client, self.delegated)
-        r = self.client.patch(f"/api/manuals/{manual_id}/", {"name": "Editado Delegado"}, format="json")
+        r = self.client.patch(f"/api/v1/manuals/{manual_id}/", {"name": "Editado Delegado"}, format="json")
         self.assertEqual(r.status_code, status.HTTP_200_OK)
 
     def test_regular_user_cannot_edit(self):
         manual_id = self._create_manual()
         auth(self.client, self.regular)
-        r = self.client.patch(f"/api/manuals/{manual_id}/", {"name": "Proibido"}, format="json")
+        r = self.client.patch(f"/api/v1/manuals/{manual_id}/", {"name": "Proibido"}, format="json")
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_system_admin_can_edit(self):
         manual_id = self._create_manual()
         auth(self.client, self.system_admin)
-        r = self.client.patch(f"/api/manuals/{manual_id}/", {"name": "Admin Edit"}, format="json")
+        r = self.client.patch(f"/api/v1/manuals/{manual_id}/", {"name": "Admin Edit"}, format="json")
         self.assertEqual(r.status_code, status.HTTP_200_OK)
 
     def test_owner_can_delete(self):
         manual_id = self._create_manual()
         auth(self.client, self.owner)
-        r = self.client.delete(f"/api/manuals/{manual_id}/")
+        r = self.client.delete(f"/api/v1/manuals/{manual_id}/")
         self.assertEqual(r.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_delegated_cannot_delete(self):
         manual_id = self._create_manual()
         auth(self.client, self.delegated)
-        r = self.client.delete(f"/api/manuals/{manual_id}/")
+        r = self.client.delete(f"/api/v1/manuals/{manual_id}/")
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_regular_user_cannot_delete(self):
         manual_id = self._create_manual()
         auth(self.client, self.regular)
-        r = self.client.delete(f"/api/manuals/{manual_id}/")
+        r = self.client.delete(f"/api/v1/manuals/{manual_id}/")
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_system_admin_can_delete(self):
         manual_id = self._create_manual()
         auth(self.client, self.system_admin)
-        r = self.client.delete(f"/api/manuals/{manual_id}/")
+        r = self.client.delete(f"/api/v1/manuals/{manual_id}/")
         self.assertEqual(r.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_regular_user_can_read(self):
         manual_id = self._create_manual()
         auth(self.client, self.regular)
-        r = self.client.get(f"/api/manuals/{manual_id}/")
+        r = self.client.get(f"/api/v1/manuals/{manual_id}/")
         self.assertEqual(r.status_code, status.HTTP_200_OK)
 
     def test_user_permissions_field_in_response(self):
         manual_id = self._create_manual()
         auth(self.client, self.owner)
-        r = self.client.get(f"/api/manuals/{manual_id}/")
+        r = self.client.get(f"/api/v1/manuals/{manual_id}/")
         self.assertIn("user_permissions", r.data)
         self.assertTrue(r.data["user_permissions"]["can_edit"])
         self.assertTrue(r.data["user_permissions"]["can_delete"])
@@ -150,7 +150,7 @@ class ManualPermissionTest(BasePermissionTest):
     def test_regular_user_permissions_field_denies(self):
         manual_id = self._create_manual()
         auth(self.client, self.regular)
-        r = self.client.get(f"/api/manuals/{manual_id}/")
+        r = self.client.get(f"/api/v1/manuals/{manual_id}/")
         self.assertIn("user_permissions", r.data)
         self.assertFalse(r.data["user_permissions"]["can_edit"])
         self.assertFalse(r.data["user_permissions"]["can_delete"])
@@ -160,8 +160,8 @@ class ManualPermissionTest(BasePermissionTest):
         manual_id = self._create_manual()
         auth(self.client, self.delegated)
         r = self.client.post(
-            f"/api/manuals/{manual_id}/share/",
-            {"add": [self.regular.id]},
+            f"/api/v1/manuals/{manual_id}/share/",
+            {"add": [self.regular.email]},
             format="json",
         )
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
@@ -170,8 +170,8 @@ class ManualPermissionTest(BasePermissionTest):
         manual_id = self._create_manual()
         auth(self.client, self.owner)
         r = self.client.post(
-            f"/api/manuals/{manual_id}/share/",
-            {"add": [self.regular.id]},
+            f"/api/v1/manuals/{manual_id}/share/",
+            {"add": [self.regular.email]},
             format="json",
         )
         self.assertEqual(r.status_code, status.HTTP_200_OK)
@@ -183,7 +183,7 @@ class ManualPermissionTest(BasePermissionTest):
         self.assertEqual(manual.owner, self.owner)
         # Mesmo depois de editar como delegado, owner não muda
         auth(self.client, self.delegated)
-        self.client.patch(f"/api/manuals/{manual_id}/", {"name": "Edit by delegated"}, format="json")
+        self.client.patch(f"/api/v1/manuals/{manual_id}/", {"name": "Edit by delegated"}, format="json")
         manual.refresh_from_db()
         self.assertEqual(manual.owner, self.owner)
 
@@ -198,7 +198,7 @@ class TutorialPermissionTest(BasePermissionTest):
     def _create_tutorial(self):
         auth(self.client, self.owner)
         r = self.client.post(
-            "/api/tutorials/",
+            "/api/v1/tutorials/tutorials/",
             {"title": "Tutorial Teste", "description": "Desc", "sector": self.sector.id, "tags": []},
             format="json",
         )
@@ -212,61 +212,61 @@ class TutorialPermissionTest(BasePermissionTest):
     def test_owner_can_edit(self):
         tid = self._create_tutorial()
         auth(self.client, self.owner)
-        r = self.client.patch(f"/api/tutorials/{tid}/", {"title": "Editado"}, format="json")
+        r = self.client.patch(f"/api/v1/tutorials/tutorials/{tid}/", {"title": "Editado"}, format="json")
         self.assertEqual(r.status_code, status.HTTP_200_OK)
 
     def test_delegated_can_edit(self):
         tid = self._create_tutorial()
         auth(self.client, self.delegated)
-        r = self.client.patch(f"/api/tutorials/{tid}/", {"title": "Edit Delegado"}, format="json")
+        r = self.client.patch(f"/api/v1/tutorials/tutorials/{tid}/", {"title": "Edit Delegado"}, format="json")
         self.assertEqual(r.status_code, status.HTTP_200_OK)
 
     def test_regular_user_cannot_edit(self):
         tid = self._create_tutorial()
         auth(self.client, self.regular)
-        r = self.client.patch(f"/api/tutorials/{tid}/", {"title": "Proibido"}, format="json")
+        r = self.client.patch(f"/api/v1/tutorials/tutorials/{tid}/", {"title": "Proibido"}, format="json")
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_system_admin_can_edit(self):
         tid = self._create_tutorial()
         auth(self.client, self.system_admin)
-        r = self.client.patch(f"/api/tutorials/{tid}/", {"title": "Admin Edit"}, format="json")
+        r = self.client.patch(f"/api/v1/tutorials/tutorials/{tid}/", {"title": "Admin Edit"}, format="json")
         self.assertEqual(r.status_code, status.HTTP_200_OK)
 
     def test_owner_can_delete(self):
         tid = self._create_tutorial()
         auth(self.client, self.owner)
-        r = self.client.delete(f"/api/tutorials/{tid}/")
+        r = self.client.delete(f"/api/v1/tutorials/tutorials/{tid}/")
         self.assertEqual(r.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_delegated_cannot_delete(self):
         tid = self._create_tutorial()
         auth(self.client, self.delegated)
-        r = self.client.delete(f"/api/tutorials/{tid}/")
+        r = self.client.delete(f"/api/v1/tutorials/tutorials/{tid}/")
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_regular_user_cannot_delete(self):
         tid = self._create_tutorial()
         auth(self.client, self.regular)
-        r = self.client.delete(f"/api/tutorials/{tid}/")
+        r = self.client.delete(f"/api/v1/tutorials/tutorials/{tid}/")
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_system_admin_can_delete(self):
         tid = self._create_tutorial()
         auth(self.client, self.system_admin)
-        r = self.client.delete(f"/api/tutorials/{tid}/")
+        r = self.client.delete(f"/api/v1/tutorials/tutorials/{tid}/")
         self.assertEqual(r.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_regular_user_can_read(self):
         tid = self._create_tutorial()
         auth(self.client, self.regular)
-        r = self.client.get(f"/api/tutorials/{tid}/")
+        r = self.client.get(f"/api/v1/tutorials/tutorials/{tid}/")
         self.assertEqual(r.status_code, status.HTTP_200_OK)
 
     def test_user_permissions_field_owner(self):
         tid = self._create_tutorial()
         auth(self.client, self.owner)
-        r = self.client.get(f"/api/tutorials/{tid}/")
+        r = self.client.get(f"/api/v1/tutorials/tutorials/{tid}/")
         self.assertIn("user_permissions", r.data)
         self.assertTrue(r.data["user_permissions"]["can_edit"])
         self.assertTrue(r.data["user_permissions"]["can_delete"])
@@ -274,7 +274,7 @@ class TutorialPermissionTest(BasePermissionTest):
     def test_user_permissions_field_regular(self):
         tid = self._create_tutorial()
         auth(self.client, self.regular)
-        r = self.client.get(f"/api/tutorials/{tid}/")
+        r = self.client.get(f"/api/v1/tutorials/tutorials/{tid}/")
         self.assertIn("user_permissions", r.data)
         self.assertFalse(r.data["user_permissions"]["can_edit"])
         self.assertFalse(r.data["user_permissions"]["can_delete"])
@@ -282,7 +282,7 @@ class TutorialPermissionTest(BasePermissionTest):
     def test_user_permissions_field_delegated(self):
         tid = self._create_tutorial()
         auth(self.client, self.delegated)
-        r = self.client.get(f"/api/tutorials/{tid}/")
+        r = self.client.get(f"/api/v1/tutorials/tutorials/{tid}/")
         self.assertTrue(r.data["user_permissions"]["can_edit"])
         self.assertFalse(r.data["user_permissions"]["can_delete"])
 
@@ -290,8 +290,8 @@ class TutorialPermissionTest(BasePermissionTest):
         tid = self._create_tutorial()
         auth(self.client, self.delegated)
         r = self.client.post(
-            f"/api/tutorials/{tid}/share/",
-            {"add": [self.regular.id]},
+            f"/api/v1/tutorials/tutorials/{tid}/share/",
+            {"add": [self.regular.email]},
             format="json",
         )
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
@@ -302,7 +302,7 @@ class TutorialPermissionTest(BasePermissionTest):
         tutorial = Tutorial.objects.get(pk=tid)
         original_owner = tutorial.created_by
         auth(self.client, self.delegated)
-        self.client.patch(f"/api/tutorials/{tid}/", {"title": "Edit by delegated"}, format="json")
+        self.client.patch(f"/api/v1/tutorials/tutorials/{tid}/", {"title": "Edit by delegated"}, format="json")
         tutorial.refresh_from_db()
         self.assertEqual(tutorial.created_by, original_owner)
 
@@ -317,7 +317,7 @@ class CoursePermissionTest(BasePermissionTest):
     def _create_course(self):
         auth(self.client, self.owner)
         r = self.client.post(
-            "/api/courses/",
+            "/api/v1/courses/",
             {
                 "name": "Curso Teste",
                 "description": "Desc",
@@ -341,61 +341,61 @@ class CoursePermissionTest(BasePermissionTest):
     def test_owner_can_edit(self):
         cid = self._create_course()
         auth(self.client, self.owner)
-        r = self.client.patch(f"/api/courses/{cid}/", {"name": "Editado"}, format="json")
+        r = self.client.patch(f"/api/v1/courses/{cid}/", {"name": "Editado"}, format="json")
         self.assertEqual(r.status_code, status.HTTP_200_OK)
 
     def test_delegated_can_edit(self):
         cid = self._create_course()
         auth(self.client, self.delegated)
-        r = self.client.patch(f"/api/courses/{cid}/", {"name": "Edit Delegado"}, format="json")
+        r = self.client.patch(f"/api/v1/courses/{cid}/", {"name": "Edit Delegado"}, format="json")
         self.assertEqual(r.status_code, status.HTTP_200_OK)
 
     def test_regular_user_cannot_edit(self):
         cid = self._create_course()
         auth(self.client, self.regular)
-        r = self.client.patch(f"/api/courses/{cid}/", {"name": "Proibido"}, format="json")
+        r = self.client.patch(f"/api/v1/courses/{cid}/", {"name": "Proibido"}, format="json")
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_system_admin_can_edit(self):
         cid = self._create_course()
         auth(self.client, self.system_admin)
-        r = self.client.patch(f"/api/courses/{cid}/", {"name": "Admin Edit"}, format="json")
+        r = self.client.patch(f"/api/v1/courses/{cid}/", {"name": "Admin Edit"}, format="json")
         self.assertEqual(r.status_code, status.HTTP_200_OK)
 
     def test_owner_can_delete(self):
         cid = self._create_course()
         auth(self.client, self.owner)
-        r = self.client.delete(f"/api/courses/{cid}/")
+        r = self.client.delete(f"/api/v1/courses/{cid}/")
         self.assertEqual(r.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_delegated_cannot_delete(self):
         cid = self._create_course()
         auth(self.client, self.delegated)
-        r = self.client.delete(f"/api/courses/{cid}/")
+        r = self.client.delete(f"/api/v1/courses/{cid}/")
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_regular_user_cannot_delete(self):
         cid = self._create_course()
         auth(self.client, self.regular)
-        r = self.client.delete(f"/api/courses/{cid}/")
+        r = self.client.delete(f"/api/v1/courses/{cid}/")
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_system_admin_can_delete(self):
         cid = self._create_course()
         auth(self.client, self.system_admin)
-        r = self.client.delete(f"/api/courses/{cid}/")
+        r = self.client.delete(f"/api/v1/courses/{cid}/")
         self.assertEqual(r.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_regular_user_can_read(self):
         cid = self._create_course()
         auth(self.client, self.regular)
-        r = self.client.get(f"/api/courses/{cid}/")
+        r = self.client.get(f"/api/v1/courses/{cid}/")
         self.assertEqual(r.status_code, status.HTTP_200_OK)
 
     def test_user_permissions_field_owner(self):
         cid = self._create_course()
         auth(self.client, self.owner)
-        r = self.client.get(f"/api/courses/{cid}/")
+        r = self.client.get(f"/api/v1/courses/{cid}/")
         self.assertIn("user_permissions", r.data)
         self.assertTrue(r.data["user_permissions"]["can_edit"])
         self.assertTrue(r.data["user_permissions"]["can_delete"])
@@ -404,7 +404,7 @@ class CoursePermissionTest(BasePermissionTest):
     def test_user_permissions_field_regular(self):
         cid = self._create_course()
         auth(self.client, self.regular)
-        r = self.client.get(f"/api/courses/{cid}/")
+        r = self.client.get(f"/api/v1/courses/{cid}/")
         self.assertIn("user_permissions", r.data)
         self.assertFalse(r.data["user_permissions"]["can_edit"])
         self.assertFalse(r.data["user_permissions"]["can_delete"])
@@ -412,7 +412,7 @@ class CoursePermissionTest(BasePermissionTest):
     def test_user_permissions_field_delegated(self):
         cid = self._create_course()
         auth(self.client, self.delegated)
-        r = self.client.get(f"/api/courses/{cid}/")
+        r = self.client.get(f"/api/v1/courses/{cid}/")
         self.assertTrue(r.data["user_permissions"]["can_edit"])
         self.assertFalse(r.data["user_permissions"]["can_delete"])
         self.assertFalse(r.data["user_permissions"]["can_manage_access"])
@@ -421,8 +421,8 @@ class CoursePermissionTest(BasePermissionTest):
         cid = self._create_course()
         auth(self.client, self.delegated)
         r = self.client.post(
-            f"/api/courses/{cid}/share/",
-            {"add": [self.regular.id]},
+            f"/api/v1/courses/{cid}/share/",
+            {"add": [self.regular.email]},
             format="json",
         )
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
@@ -433,7 +433,7 @@ class CoursePermissionTest(BasePermissionTest):
         course = Course.objects.get(pk=cid)
         self.assertEqual(course.owner, self.owner)
         auth(self.client, self.delegated)
-        self.client.patch(f"/api/courses/{cid}/", {"name": "Edit by delegated"}, format="json")
+        self.client.patch(f"/api/v1/courses/{cid}/", {"name": "Edit by delegated"}, format="json")
         course.refresh_from_db()
         self.assertEqual(course.owner, self.owner)
 
@@ -555,8 +555,8 @@ class AuditLogTest(BasePermissionTest):
         initial_count = AuditLog.objects.filter(action="grant_admin").count()
         auth(self.client, self.owner)
         self.client.post(
-            f"/api/manuals/{manual.id}/share/",
-            {"add": [self.regular.id]},
+            f"/api/v1/manuals/{manual.id}/share/",
+            {"add": [self.regular.email]},
             format="json",
         )
         self.assertEqual(
@@ -575,8 +575,8 @@ class AuditLogTest(BasePermissionTest):
         initial_count = AuditLog.objects.filter(action="revoke_admin").count()
         auth(self.client, self.owner)
         self.client.post(
-            f"/api/manuals/{manual.id}/share/",
-            {"remove": [self.regular.id]},
+            f"/api/v1/manuals/{manual.id}/share/",
+            {"remove": [self.regular.email]},
             format="json",
         )
         self.assertEqual(
@@ -590,5 +590,5 @@ class AuditLogTest(BasePermissionTest):
         manual.sectors.add(self.sector)
 
         auth(self.client, self.regular)
-        r = self.client.patch(f"/api/manuals/{manual.id}/", {"name": "hack"}, format="json")
+        r = self.client.patch(f"/api/v1/manuals/{manual.id}/", {"name": "hack"}, format="json")
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)

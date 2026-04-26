@@ -14,6 +14,8 @@ import type {
   ExamSubmission,
   ExamResult,
   Certificate,
+  CourseParticipantsResponse,
+  ParticipantsFilters,
 } from '@/types/course.types';
 
 /**
@@ -308,6 +310,60 @@ export async function submitExam(courseId: string, submission: ExamSubmission): 
     throw new Error(error.error || 'Erro ao submeter prova');
   }
 
+  return response.json();
+}
+
+// ==================== PARTICIPANTS ====================
+
+export async function getCourseParticipants(
+  courseId: string,
+  filters: Partial<ParticipantsFilters> = {}
+): Promise<CourseParticipantsResponse> {
+  const queryParams = new URLSearchParams();
+
+  if (filters.search) queryParams.append('search', filters.search);
+  if (filters.cpf) queryParams.append('cpf', filters.cpf);
+  if (filters.sector) queryParams.append('sector', filters.sector);
+  if (filters.status && filters.status !== 'all') queryParams.append('status', filters.status);
+  if (filters.ordering) queryParams.append('ordering', filters.ordering);
+  if (filters.page) queryParams.append('page', filters.page.toString());
+  if (filters.page_size) queryParams.append('page_size', filters.page_size.toString());
+
+  const qs = queryParams.toString();
+  const url = `${BASE_URL}/courses/${courseId}/participants/${qs ? `?${qs}` : ''}`;
+
+  const response = await authFetch(url, { method: 'GET' });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || 'Erro ao buscar participantes');
+  }
+
+  return response.json();
+}
+
+// ==================== SHARE / ACCESS ====================
+
+export async function getSharedAdminsCourse(id: string): Promise<{ id: number; email: string; name: string }[]> {
+  const response = await authFetch(`${BASE_URL}/courses/${id}/share/`, { method: 'GET' });
+  if (!response.ok) throw new Error('Erro ao buscar administradores');
+  const data = await response.json();
+  return data.shared_admins;
+}
+
+export async function updateSharedAdminsCourse(
+  id: string,
+  payload: { add?: string[]; remove?: string[] }
+): Promise<{ shared_admins: { id: number; email: string; name: string }[]; errors?: string[] }> {
+  const response = await authFetch(`${BASE_URL}/courses/${id}/share/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.detail || 'Erro ao atualizar acesso');
+  }
   return response.json();
 }
 

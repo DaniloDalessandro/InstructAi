@@ -60,11 +60,11 @@ class CourseViewSet(viewsets.ModelViewSet):
         log_action(self.request.user, 'delete', 'course', instance, request=self.request)
         instance.delete()
 
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, CanManageAccess])
+    @action(detail=True, methods=['get', 'post'], permission_classes=[IsAuthenticated, CanManageAccess])
     def share(self, request, pk=None):
         """
-        Gerencia administradores delegados.
-        Body: { "add": [user_id, ...], "remove": [user_id, ...] }
+        GET  — lista os administradores delegados.
+        POST — { "add": ["email@..."], "remove": ["email@..."] }
         """
         from django.contrib.auth import get_user_model
         from access.models import log_action
@@ -72,21 +72,26 @@ class CourseViewSet(viewsets.ModelViewSet):
         course = self.get_object()
         User = get_user_model()
 
-        add_ids = request.data.get('add', [])
-        remove_ids = request.data.get('remove', [])
+        if request.method == 'GET':
+            admins = course.shared_admins.values('id', 'email', 'name')
+            return Response({'shared_admins': list(admins)})
 
-        for uid in add_ids:
+        errors = []
+        for email in request.data.get('add', []):
             try:
-                user = User.objects.get(pk=uid)
+                user = User.objects.get(email=email)
+                if user == course.owner:
+                    errors.append(f'{email} já é o dono do curso.')
+                    continue
                 course.shared_admins.add(user)
                 log_action(request.user, 'grant_admin', 'course', course,
                            {'target_user': user.email}, request)
             except User.DoesNotExist:
-                pass
+                errors.append(f'Usuário {email} não encontrado.')
 
-        for uid in remove_ids:
+        for email in request.data.get('remove', []):
             try:
-                user = User.objects.get(pk=uid)
+                user = User.objects.get(email=email)
                 course.shared_admins.remove(user)
                 log_action(request.user, 'revoke_admin', 'course', course,
                            {'target_user': user.email}, request)
@@ -94,7 +99,155 @@ class CourseViewSet(viewsets.ModelViewSet):
                 pass
 
         admins = course.shared_admins.values('id', 'email', 'name')
-        return Response({'shared_admins': list(admins)})
+        data = {'shared_admins': list(admins)}
+        if errors:
+            data['errors'] = errors
+        return Response(data)
+
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated, CanManageAccess])
+    def participants(self, request, pk=None):
+        """
+        Lista todos os usuários ativos com seu status neste curso.
+        Requer permissão de gerenciamento (owner ou admin).
+        Suporta filtros: search, cpf, sector, status, ordering.
+        """
+        from django.contrib.auth import get_user_model
+        from django.db.models import (
+            Subquery, OuterRef, Value, IntegerField, BooleanField,
+            Q, Count, Case, When
+        )
+        from django.db.models.functions import Coalesce
+        from django.core.paginator import Paginator
+
+        course = self.get_object()
+        User = get_user_model()
+        has_exam = course.has_final_exam
+
+        # Subqueries para buscar progresso do usuário neste curso
+        progress_qs = CourseProgress.objects.filter(course=course, user=OuterRef('pk'))
+
+        users = (
+            User.objects.filter(is_active=True)
+            .select_related('sector')
+            .annotate(
+                completion=Coalesce(
+                    Subquery(progress_qs.values('completion_percentage')[:1]),
+                    Value(0),
+                    output_field=IntegerField(),
+                ),
+                exam_passed_val=Coalesce(
+                    Subquery(progress_qs.values('exam_passed')[:1]),
+                    Value(False),
+                    output_field=BooleanField(),
+                ),
+                exam_score_val=Subquery(progress_qs.values('exam_score')[:1]),
+                completed_at_val=Subquery(progress_qs.values('completed_at')[:1]),
+                last_access_val=Subquery(progress_qs.values('updated_at')[:1]),
+            )
+        )
+
+        # Filtros
+        search = request.query_params.get('search', '').strip()
+        if search:
+            users = users.filter(Q(name__icontains=search) | Q(email__icontains=search))
+
+        cpf_param = request.query_params.get('cpf', '').strip()
+        if cpf_param:
+            users = users.filter(cpf__icontains=cpf_param)
+
+        sector_id = request.query_params.get('sector', '').strip()
+        if sector_id:
+            users = users.filter(sector_id=sector_id)
+
+        # Condições de status
+        if has_exam:
+            completed_q = Q(completion=100) & Q(exam_passed_val=True)
+        else:
+            completed_q = Q(completion=100)
+        in_progress_q = Q(completion__gt=0) & ~completed_q
+        pending_q = Q(completion=0)
+
+        # Resumo (antes do filtro de status)
+        summary = users.aggregate(
+            total=Count('id'),
+            completed=Count('id', filter=completed_q),
+            in_progress=Count('id', filter=in_progress_q),
+            pending=Count('id', filter=pending_q),
+        )
+        total = summary['total']
+        completed_count = summary['completed']
+        completion_pct = round(completed_count / total * 100, 1) if total > 0 else 0.0
+
+        # Filtro por status
+        status_filter = request.query_params.get('status', 'all')
+        if status_filter == 'completed':
+            users = users.filter(completed_q)
+        elif status_filter == 'in_progress':
+            users = users.filter(in_progress_q)
+        elif status_filter == 'pending':
+            users = users.filter(pending_q)
+
+        # Ordenação
+        ordering_map = {
+            'name': 'name',
+            '-name': '-name',
+            'recent': '-last_access_val',
+            'pending_first': 'completion',
+        }
+        ordering = request.query_params.get('ordering', 'name')
+        users = users.order_by(ordering_map.get(ordering, 'name'))
+
+        # Paginação
+        page_size = min(int(request.query_params.get('page_size', 20)), 100)
+        page_number = max(int(request.query_params.get('page', 1)), 1)
+        paginator = Paginator(users, page_size)
+        page_obj = paginator.get_page(page_number)
+
+        def get_status(user):
+            if has_exam:
+                if user.completion == 100 and user.exam_passed_val:
+                    return 'completed'
+            else:
+                if user.completion == 100:
+                    return 'completed'
+            if user.completion > 0:
+                return 'in_progress'
+            return 'pending'
+
+        results = [
+            {
+                'user_id': user.id,
+                'name': user.name,
+                'email': user.email,
+                'cpf': user.cpf or None,
+                'sector_id': user.sector_id,
+                'sector_name': user.sector.name if user.sector else None,
+                'position': user.position or None,
+                'status': get_status(user),
+                'completion_percentage': user.completion,
+                'exam_score': user.exam_score_val,
+                'exam_passed': user.exam_passed_val,
+                'completed_at': user.completed_at_val,
+                'last_access': user.last_access_val,
+            }
+            for user in page_obj
+        ]
+
+        return Response({
+            'summary': {
+                'total': total,
+                'completed': completed_count,
+                'in_progress': summary['in_progress'],
+                'pending': summary['pending'],
+                'completion_percentage': completion_pct,
+            },
+            'count': paginator.count,
+            'total_pages': paginator.num_pages,
+            'current_page': page_number,
+            'has_next': page_obj.has_next(),
+            'has_previous': page_obj.has_previous(),
+            'results': results,
+        })
 
     @action(detail=True, methods=['get'])
     def progress(self, request, pk=None):

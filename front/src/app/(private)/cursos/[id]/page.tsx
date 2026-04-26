@@ -55,10 +55,14 @@ import {
   Edit,
   Trash2,
   Settings,
+  Users,
+  BarChart2,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { canEdit, canDelete } from '@/lib/permissions';
+import { canEdit, canDelete, canManageAccess } from '@/lib/permissions';
+import { ShareAccessDialog } from '@/components/shared/ShareAccessDialog';
+import { getSharedAdminsCourse, updateSharedAdminsCourse } from '@/lib/api/courses';
 
 interface CourseViewState {
   course: Course | null;
@@ -83,6 +87,7 @@ export default function CoursePage() {
   const [currentLessonIndex, setCurrentLessonIndex] = useState(0);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -447,8 +452,28 @@ export default function CoursePage() {
               <h1 className="text-3xl font-bold flex-1">{state.course.name}</h1>
 
               {/* Botões de Gerenciamento */}
-              {(canEdit(state.course) || canDelete(state.course)) && (
+              {(canEdit(state.course) || canDelete(state.course) || canManageAccess(state.course)) && (
                 <div className="flex gap-2">
+                  {canManageAccess(state.course) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push(`/cursos/${state.course!.id}/participantes`)}
+                  >
+                    <BarChart2 className="mr-2 h-4 w-4" />
+                    Participantes
+                  </Button>
+                  )}
+                  {canManageAccess(state.course) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowShareDialog(true)}
+                  >
+                    <Users className="mr-2 h-4 w-4" />
+                    Acesso
+                  </Button>
+                  )}
                   {canEdit(state.course) && (
                   <Button
                     variant="outline"
@@ -775,6 +800,16 @@ export default function CoursePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog de Gerenciamento de Acesso */}
+      <ShareAccessDialog
+        open={showShareDialog}
+        onClose={() => setShowShareDialog(false)}
+        resourceId={state.course?.id?.toString() ?? ""}
+        resourceTitle={state.course?.name ?? ""}
+        getAdmins={getSharedAdminsCourse}
+        updateAdmins={updateSharedAdminsCourse}
+      />
 
       {/* Dialog de Confirmação de Exclusão do Curso */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
