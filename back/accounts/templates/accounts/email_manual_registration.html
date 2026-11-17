@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Acesso InstructAI criado</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);">
+          <!-- Header -->
+          <tr>
+            <td style="background:#5e6ad2;padding:32px 40px;text-align:center;">
+              <span style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">InstructAI</span>
+              <p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,.75);">Gestão de Conhecimento</p>
+            </td>
+          </tr>
+          <!-- Body -->
+          <tr>
+            <td style="padding:40px 40px 32px;">
+              <h1 style="margin:0 0 12px;font-size:22px;font-weight:700;color:#111827;">Seu acesso foi criado!</h1>
+              <p style="margin:0 0 24px;font-size:15px;color:#4b5563;line-height:1.6;">
+                Olá, <strong>{{ name }}</strong>! Sua conta no <strong>InstructAI</strong> foi criada por um administrador. Use as credenciais abaixo para acessar o sistema.
+              </p>
+
+              <div style="background:#f3f4f6;border-radius:10px;padding:20px 24px;margin-bottom:24px;">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="padding:6px 0;">
+                      <span style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">E-mail</span>
+                      <p style="margin:2px 0 0;font-size:15px;font-weight:600;color:#111827;">{{ email }}</p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:12px 0 6px;">
+                      <span style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Senha temporária</span>
+                      <p style="margin:2px 0 0;font-size:18px;font-weight:700;color:#5e6ad2;letter-spacing:1px;font-family:monospace;">{{ temp_password }}</p>
+                    </td>
+                  </tr>
+                </table>
+              </div>
+
+              <table cellpadding="0" cellspacing="0" style="margin:0 auto 24px;">
+                <tr>
+                  <td style="background:#5e6ad2;border-radius:8px;">
+                    <a href="{{ login_url }}" style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
+                      Acessar agora
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px 18px;">
+                <p style="margin:0;font-size:13px;color:#991b1b;">
+                  🔒 Por segurança, você será solicitado a <strong>trocar sua senha</strong> no primeiro acesso.
+                </p>
+              </div>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center;">
+              <p style="margin:0;font-size:12px;color:#9ca3af;">
+                Se você não reconhece este cadastro, entre em contato com seu administrador.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

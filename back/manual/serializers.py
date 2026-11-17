@@ -1,8 +1,16 @@
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field, inline_serializer
+from drf_spectacular.types import OpenApiTypes
 from .models import Manual
 from tags.serializers import TagSerializer
 from sectors.serializers import SectorSerializer
 from access.permissions import get_user_permissions
+
+_permissions_field = inline_serializer("ManualUserPermissions", {
+    "can_edit": serializers.BooleanField(),
+    "can_delete": serializers.BooleanField(),
+    "can_manage_access": serializers.BooleanField(),
+})
 
 
 class ManualSerializer(serializers.ModelSerializer):
@@ -12,22 +20,29 @@ class ManualSerializer(serializers.ModelSerializer):
     pdf_url = serializers.SerializerMethodField()
     user_permissions = serializers.SerializerMethodField()
 
+    # Multipart omits unchecked booleans; retain the model default on creation.
+    available_for_all_sectors = serializers.BooleanField(default=True)
+    availability_status = serializers.CharField(read_only=True)
+
     class Meta:
         model = Manual
         fields = [
             'id', 'name', 'pdf_file', 'pdf_url', 'sectors', 'sectors_detail',
             'tags', 'tags_detail', 'is_active',
             'created_at', 'updated_at', 'created_by', 'updated_by',
-            'user_permissions',
+            'available_for_all_sectors', 'allowed_sectors', 'available_from', 'available_until',
+            'availability_status', 'user_permissions',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'pdf_url', 'user_permissions']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'pdf_url', 'availability_status', 'user_permissions']
 
+    @extend_schema_field(_permissions_field)
     def get_user_permissions(self, obj):
         request = self.context.get('request')
         if request and request.user:
             return get_user_permissions(request.user, obj)
         return {"can_edit": False, "can_delete": False, "can_manage_access": False}
 
+    @extend_schema_field(OpenApiTypes.URI)
     def get_pdf_url(self, obj):
         """Retorna a URL completa do arquivo PDF"""
         if obj.pdf_file:
@@ -41,6 +56,7 @@ class ManualSerializer(serializers.ModelSerializer):
         """Cria manual com auditoria e relacionamentos many-to-many"""
         sectors = validated_data.pop('sectors', [])
         tags = validated_data.pop('tags', [])
+        allowed_sectors = validated_data.pop('allowed_sectors', [])
 
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
@@ -55,6 +71,7 @@ class ManualSerializer(serializers.ModelSerializer):
             manual.sectors.set(sectors)
         if tags:
             manual.tags.set(tags)
+        manual.allowed_sectors.set(allowed_sectors)
 
         return manual
 
@@ -62,6 +79,7 @@ class ManualSerializer(serializers.ModelSerializer):
         """Atualiza manual com auditoria e relacionamentos many-to-many"""
         sectors = validated_data.pop('sectors', None)
         tags = validated_data.pop('tags', None)
+        allowed_sectors = validated_data.pop('allowed_sectors', None)
 
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
@@ -75,5 +93,7 @@ class ManualSerializer(serializers.ModelSerializer):
             instance.sectors.set(sectors)
         if tags is not None:
             instance.tags.set(tags)
+        if allowed_sectors is not None:
+            instance.allowed_sectors.set(allowed_sectors)
 
         return instance

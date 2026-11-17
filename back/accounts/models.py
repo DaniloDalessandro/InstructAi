@@ -1,4 +1,8 @@
+import secrets
+from datetime import timedelta
+
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -44,6 +48,14 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         related_name='users',
         verbose_name='Setor',
     )
+    must_change_password = models.BooleanField(default=False, verbose_name='Deve trocar senha')
+    created_by = models.ForeignKey(
+        'self',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='created_users',
+        verbose_name='Criado por',
+    )
 
     objects = CustomUserManager()
 
@@ -56,3 +68,93 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.email
+
+
+class UserInvitation(models.Model):
+    STATUS_PENDING = 'pending'
+    STATUS_USED = 'used'
+    STATUS_EXPIRED = 'expired'
+    STATUS_CANCELLED = 'cancelled'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pendente'),
+        (STATUS_USED, 'Usado'),
+        (STATUS_EXPIRED, 'Expirado'),
+        (STATUS_CANCELLED, 'Cancelado'),
+    ]
+
+    email = models.EmailField(verbose_name='Email')
+    token = models.CharField(max_length=64, unique=True, editable=False)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='invitations_created',
+        verbose_name='Criado por',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    invited_user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='invitation',
+        verbose_name='Usuário convidado',
+    )
+
+    def save(self, *args, **kwargs):
+        if not self.token:
+            self.token = secrets.token_urlsafe(32)
+        if not self.expires_at:
+            self.expires_at = timezone.now() + timedelta(hours=8)
+        super().save(*args, **kwargs)
+
+    @property
+    def is_valid(self):
+        return self.status == self.STATUS_PENDING and timezone.now() < self.expires_at
+
+    def refresh_token(self):
+        self.token = secrets.token_urlsafe(32)
+        self.expires_at = timezone.now() + timedelta(hours=8)
+        self.status = self.STATUS_PENDING
+
+    class Meta:
+        verbose_name = 'Convite'
+        verbose_name_plural = 'Convites'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'Convite para {self.email} ({self.get_status_display()})'
+
+
+class PasswordResetToken(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='password_reset_tokens',
+        verbose_name='Usuário',
+    )
+    token = models.CharField(max_length=64, unique=True, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used = models.BooleanField(default=False)
+
+    def save(self, *args, **kwargs):
+        if not self.token:
+            self.token = secrets.token_urlsafe(32)
+        if not self.expires_at:
+            self.expires_at = timezone.now() + timedelta(hours=1)
+        super().save(*args, **kwargs)
+
+    @property
+    def is_valid(self):
+        return not self.used and timezone.now() < self.expires_at
+
+    class Meta:
+        verbose_name = 'Token de recuperação de senha'
+        verbose_name_plural = 'Tokens de recuperação de senha'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'Reset de senha para {self.user.email}'

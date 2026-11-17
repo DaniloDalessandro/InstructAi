@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import type { CourseListItem } from '@/types/course.types';
-import { cn } from '@/lib/utils/utils';
+import { cn } from '@/lib/utils';
 
 interface CourseCardProps {
   course: CourseListItem;

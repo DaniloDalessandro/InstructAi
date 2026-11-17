@@ -7,35 +7,6 @@ import type { Manual, ManualFormData, ManualListResponse } from '@/types/manual.
  * Cliente de API para manuais
  */
 
-// authFetch personalizado para multipart/form-data (upload de arquivos)
-async function authFetchMultipart(
-  url: string,
-  options: RequestInit = {}
-): Promise<Response> {
-  const access = document.cookie
-    .split('; ')
-    .find((row) => row.startsWith('access='))
-    ?.split('=')[1];
-
-  if (!access) {
-    throw new Error('Token de acesso não encontrado');
-  }
-
-  const headers = {
-    ...options.headers,
-    Authorization: `Bearer ${access}`,
-    // NÃO definir Content-Type para multipart/form-data — o browser define com o boundary
-  };
-
-  // Remove Content-Type caso exista
-  const { 'Content-Type': _, ...restHeaders } = headers as any;
-
-  return fetch(url, {
-    ...options,
-    headers: restHeaders,
-  });
-}
-
 // Busca todos os manuais com paginação e filtros
 export async function getManuals(params?: {
   page?: number;
@@ -94,6 +65,10 @@ export async function createManual(data: ManualFormData): Promise<Manual> {
 
   const formData = new FormData();
   formData.append('name', data.name);
+  formData.append('available_for_all_sectors', String(data.available_for_all_sectors ?? true));
+  (data.allowed_sectors || []).forEach(id => formData.append('allowed_sectors', String(id)));
+  formData.append('available_from', data.available_from || '');
+  formData.append('available_until', data.available_until || '');
 
   if (data.pdf_file) {
     formData.append('pdf_file', data.pdf_file);
@@ -109,7 +84,7 @@ export async function createManual(data: ManualFormData): Promise<Manual> {
     formData.append('tags', tag);
   });
 
-  const response = await authFetchMultipart(url, {
+  const response = await authFetch(url, {
     method: 'POST',
     body: formData,
   });
@@ -128,6 +103,10 @@ export async function updateManual(id: string, data: ManualFormData): Promise<Ma
 
   const formData = new FormData();
   formData.append('name', data.name);
+  formData.append('available_for_all_sectors', String(data.available_for_all_sectors ?? true));
+  (data.allowed_sectors || []).forEach(id => formData.append('allowed_sectors', String(id)));
+  formData.append('available_from', data.available_from || '');
+  formData.append('available_until', data.available_until || '');
 
   // Adiciona pdf_file apenas se um novo arquivo foi selecionado
   if (data.pdf_file) {
@@ -144,8 +123,8 @@ export async function updateManual(id: string, data: ManualFormData): Promise<Ma
     formData.append('tags', tag);
   });
 
-  const response = await authFetchMultipart(url, {
-    method: 'PUT',
+  const response = await authFetch(url, {
+    method: 'PATCH',
     body: formData,
   });
 

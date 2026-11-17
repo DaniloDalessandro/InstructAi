@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import type { Sector, SectorFormData } from "@/types/sector.types"
 
 interface SectorFormProps {
@@ -22,16 +23,19 @@ interface SectorFormProps {
 
 export default function SectorForm({ open, handleClose, initialData, onSubmit }: SectorFormProps) {
   const [isLoading, setIsLoading] = useState(false)
+  const [isActive,setIsActive] = useState(true)
   const [formData, setFormData] = useState<SectorFormData>({
     name: "",
   })
 
   useEffect(() => {
     if (initialData && open) {
+      setIsActive(initialData.is_active ?? true)
       setFormData({
         name: initialData.name || "",
       })
     } else if (!open) {
+      setIsActive(true)
       // Limpa o formulário ao fechar o diálogo
       setFormData({
         name: "",
@@ -53,7 +57,7 @@ export default function SectorForm({ open, handleClose, initialData, onSubmit }:
     setIsLoading(true)
 
     try {
-      await onSubmit(formData)
+      await onSubmit({...formData,is_active:isActive})
       handleClose()
     } catch (error) {
       console.error("Erro ao salvar setor:", error)
@@ -87,6 +91,7 @@ export default function SectorForm({ open, handleClose, initialData, onSubmit }:
             </div>
           </div>
 
+          {initialData && <div className="flex items-center justify-between pb-5"><Label htmlFor="item-active">Ativo</Label><Switch id="item-active" checked={isActive} onCheckedChange={setIsActive}/></div>}
           <DialogFooter className="flex justify-end gap-2">
             <Button
               type="button"

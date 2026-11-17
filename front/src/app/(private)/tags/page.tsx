@@ -1,5 +1,6 @@
 "use client"
 
+import AdminGuard from "@/components/auth/AdminGuard"
 import React, { useState, useEffect, useCallback } from "react"
 import { DataTable } from "@/components/ui/data-table"
 import TagForm from "@/components/forms/TagForm"
@@ -18,7 +19,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
-export default function TagsPage() {
+function TagsPageContent() {
   const [tags, setTags] = useState<Tag[]>([])
   const [totalCount, setTotalCount] = useState(0)
   const [pageIndex, setPageIndex] = useState(0)
@@ -45,7 +46,7 @@ export default function TagsPage() {
         page_size: pageSize,
         search: searchQuery || undefined,
         ordering: ordering || undefined,
-        is_active: statusFilter === "all" ? undefined : statusFilter,
+        is_active: statusFilter,
       })
       setTags(response.results)
       setTotalCount(response.count)
@@ -266,4 +267,9 @@ export default function TagsPage() {
       </AlertDialog>
     </div>
   )
+}
+
+
+export default function TagsPage() {
+  return <AdminGuard><TagsPageContent /></AdminGuard>
 }

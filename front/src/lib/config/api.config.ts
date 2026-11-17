@@ -1,16 +1,3 @@
-import { API_CONFIG } from '@/constants/config';
-
-/**
- * Configuração base da API
- */
-export const apiConfig = {
-  baseURL: API_CONFIG.baseURL,
-  timeout: API_CONFIG.timeout,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-};
-
 /**
  * Endpoints da API do InstructAI
  */

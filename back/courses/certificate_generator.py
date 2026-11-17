@@ -1,185 +1,90 @@
-import os
 from io import BytesIO
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import cm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.enums import TA_CENTER
+from django.conf import settings
 from django.core.files.base import ContentFile
+from django.utils.timezone import localtime
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.colors import HexColor
+from reportlab.lib.utils import simpleSplit
+from reportlab.graphics.shapes import Drawing
+from reportlab.graphics.barcode.qr import QrCodeWidget
+from reportlab.graphics import renderPDF
 
 
 def generate_certificate_pdf(certificate):
-    """
-    Gera um certificado em PDF com design profissional.
-
-    Args:
-        certificate: Instância do modelo Certificate
-
-    Returns:
-        ContentFile com o PDF gerado
-    """
+    """Certificado em uma página, com emissora, assinatura e validação pública."""
     buffer = BytesIO()
+    width, height = landscape(A4)
+    pdf = canvas.Canvas(buffer, pagesize=(width, height))
+    pdf.setTitle(f'Certificado - {certificate.course.name}')
+    issuer = certificate.issuer_snapshot or {}
+    company_name = issuer.get('name', '')
+    pdf.setAuthor(company_name or 'InstructAI')
+    pdf.setFillColor(HexColor('#fafaff'))
+    pdf.rect(0, 0, width, height, fill=1, stroke=0)
+    pdf.setStrokeColor(HexColor('#5e6ad2'))
+    pdf.setLineWidth(2)
+    pdf.rect(28, 28, width-56, height-56)
+    pdf.setLineWidth(.5)
+    pdf.rect(35, 35, width-70, height-70)
 
-    # Configurar documento em paisagem (landscape)
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=landscape(A4),
-        rightMargin=2*cm,
-        leftMargin=2*cm,
-        topMargin=2*cm,
-        bottomMargin=2*cm
-    )
+    def centered(text, y, size=12, font='Helvetica', max_lines=2, max_width=690, color='#252947'):
+        size = float(size)
+        lines = simpleSplit(str(text), font, size, max_width)
+        while len(lines) > max_lines and size > 6:
+            size -= .5
+            lines = simpleSplit(str(text), font, size, max_width)
+        pdf.setFillColor(HexColor(color))
+        pdf.setFont(font, size)
+        for line in lines:
+            pdf.drawCentredString(width/2, y, line)
+            y -= size*1.3
+        return y
 
-    # Estilos
-    styles = getSampleStyleSheet()
+    centered('InstructAI', 535, 14, 'Helvetica-Bold', color='#5e6ad2')
+    centered('CERTIFICADO DE CONCLUSÃO', 487, 27, 'Helvetica-Bold')
+    pdf.setStrokeColor(HexColor('#d4af37'))
+    pdf.line(width/2-100, 472, width/2+100, 472)
+    centered(f'{company_name} certifica que' if company_name else 'Certificamos que', 445, 11, max_lines=2)
+    centered(certificate.user.name or certificate.user.email.split('@')[0], 403, 25, 'Helvetica-Bold', color='#4338ca')
+    centered('concluiu com êxito o curso', 360, 11)
+    centered(certificate.course.name, 330, 19, 'Helvetica-Bold')
+    centered(f'Carga horária: {certificate.course.workload_hours} horas', 286, 11)
+    if issuer.get('certificate_text'):
+        centered(issuer['certificate_text'], 258, 10, max_lines=4)
 
-    # Estilo para título principal
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=36,
-        textColor=colors.HexColor('#1a365d'),
-        spaceAfter=30,
-        alignment=TA_CENTER,
-        fontName='Helvetica-Bold'
-    )
+    if company_name:
+        if issuer.get('signatory_name'):
+            centered(issuer['signatory_name'], 179, 12, 'Helvetica-Oblique', max_lines=1, max_width=340)
+        pdf.setStrokeColor(HexColor('#8187a3'))
+        pdf.line(width/2-155, 164, width/2+155, 164)
+        centered(company_name, 148, 11, 'Helvetica-Bold', max_width=360)
+        if issuer.get('signatory_role'):
+            centered(issuer['signatory_role'], 117, 9, max_lines=1, max_width=340)
+        else:
+            centered('Empresa emissora', 117, 9)
+        if issuer.get('cnpj'):
+            centered(f"CNPJ: {issuer['cnpj']}", 103, 8, max_lines=1)
 
-    # Estilo para subtítulo
-    subtitle_style = ParagraphStyle(
-        'CustomSubtitle',
-        parent=styles['Normal'],
-        fontSize=16,
-        textColor=colors.HexColor('#4a5568'),
-        spaceAfter=20,
-        alignment=TA_CENTER,
-        fontName='Helvetica'
-    )
-
-    # Estilo para nome do usuário
-    user_name_style = ParagraphStyle(
-        'UserName',
-        parent=styles['Heading2'],
-        fontSize=28,
-        textColor=colors.HexColor('#2d3748'),
-        spaceAfter=20,
-        alignment=TA_CENTER,
-        fontName='Helvetica-Bold'
-    )
-
-    # Estilo para nome do curso
-    course_name_style = ParagraphStyle(
-        'CourseName',
-        parent=styles['Normal'],
-        fontSize=20,
-        textColor=colors.HexColor('#1a365d'),
-        spaceAfter=30,
-        alignment=TA_CENTER,
-        fontName='Helvetica-Bold'
-    )
-
-    # Estilo para informações
-    info_style = ParagraphStyle(
-        'Info',
-        parent=styles['Normal'],
-        fontSize=12,
-        textColor=colors.HexColor('#718096'),
-        alignment=TA_CENTER,
-        fontName='Helvetica'
-    )
-
-    # Elementos do certificado
-    elements = []
-
-    # Espaço superior
-    elements.append(Spacer(1, 1.5*cm))
-
-    # Título
-    elements.append(Paragraph('CERTIFICADO DE CONCLUSÃO', title_style))
-
-    # Subtítulo
-    elements.append(Paragraph('Certificamos que', subtitle_style))
-
-    # Nome do usuário
-    user_name = certificate.user.name or certificate.user.email
-    elements.append(Paragraph(user_name.upper(), user_name_style))
-
-    # Texto
-    elements.append(Paragraph('concluiu com êxito o curso', subtitle_style))
-
-    # Nome do curso
-    elements.append(Paragraph(f'<b>{certificate.course.name}</b>', course_name_style))
-
-    # Carga horária
-    elements.append(Spacer(1, 0.5*cm))
-    elements.append(Paragraph(
-        f'Com carga horária de <b>{certificate.course.workload_hours} horas</b>',
-        info_style
-    ))
-
-    # Data de emissão
-    elements.append(Spacer(1, 1*cm))
-    issue_date = certificate.issued_at.strftime('%d de %B de %Y')
-    # Converter mês para português
-    meses = {
-        'January': 'janeiro', 'February': 'fevereiro', 'March': 'março',
-        'April': 'abril', 'May': 'maio', 'June': 'junho',
-        'July': 'julho', 'August': 'agosto', 'September': 'setembro',
-        'October': 'outubro', 'November': 'novembro', 'December': 'dezembro'
-    }
-    for eng, pt in meses.items():
-        issue_date = issue_date.replace(eng, pt)
-
-    elements.append(Paragraph(
-        f'Emitido em {issue_date}',
-        info_style
-    ))
-
-    # Código de verificação
-    elements.append(Spacer(1, 0.5*cm))
-    elements.append(Paragraph(
-        f'Código de Verificação: <b>{certificate.validation_code}</b>',
-        info_style
-    ))
-
-    # Rodapé com nome da plataforma
-    elements.append(Spacer(1, 1.5*cm))
-    footer_style = ParagraphStyle(
-        'Footer',
-        parent=styles['Normal'],
-        fontSize=14,
-        textColor=colors.HexColor('#1a365d'),
-        alignment=TA_CENTER,
-        fontName='Helvetica-Bold'
-    )
-    elements.append(Paragraph('InstructAI - Plataforma de Ensino', footer_style))
-
-    # Construir PDF
-    doc.build(elements, onFirstPage=add_border, onLaterPages=add_border)
-
-    # Obter conteúdo do buffer
-    pdf_content = buffer.getvalue()
-    buffer.close()
-
-    # Retornar como ContentFile
-    filename = f'certificado_{certificate.user.id}_{certificate.course.id}.pdf'
-    return ContentFile(pdf_content, name=filename)
-
-
-def add_border(canvas, doc):
-    """
-    Adiciona borda decorativa ao certificado.
-    """
-    canvas.saveState()
-
-    # Borda externa (azul escuro)
-    canvas.setStrokeColor(colors.HexColor('#1a365d'))
-    canvas.setLineWidth(3)
-    canvas.rect(1*cm, 1*cm, doc.width + 2*cm, doc.height + 2*cm)
-
-    # Borda interna (azul claro)
-    canvas.setStrokeColor(colors.HexColor('#4299e1'))
-    canvas.setLineWidth(1)
-    canvas.rect(1.2*cm, 1.2*cm, doc.width + 1.6*cm, doc.height + 1.6*cm)
-
-    canvas.restoreState()
+    code = str(certificate.validation_code)
+    frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3001').rstrip('/')
+    validation_url = f'{frontend_url}/validar-certificado?codigo={code}'
+    pdf.setFillColor(HexColor('#62687c'))
+    pdf.setFont('Helvetica', 9)
+    issued = localtime(certificate.issued_at).strftime('%d/%m/%Y')
+    pdf.drawString(53, 94, f'Emitido em {issued}')
+    pdf.setFont('Helvetica', 8)
+    pdf.drawString(53, 78, f'Código de validação: {code}')
+    pdf.setFont('Helvetica', 7)
+    pdf.drawString(53, 61, 'Confira a autenticidade pelo QR Code ou pelo endereço:')
+    pdf.drawString(53, 49, f'{frontend_url}/validar-certificado')
+    pdf.linkURL(validation_url, (50, 45, 440, 87), relative=0)
+    qr = QrCodeWidget(validation_url)
+    x1,y1,x2,y2 = qr.getBounds()
+    size = 74
+    drawing = Drawing(size, size, transform=[size/(x2-x1),0,0,size/(y2-y1),0,0])
+    drawing.add(qr)
+    renderPDF.draw(drawing, pdf, width-134, 49)
+    pdf.showPage()
+    pdf.save()
+    return ContentFile(buffer.getvalue(), name=f'certificado_{certificate.validation_code}.pdf')

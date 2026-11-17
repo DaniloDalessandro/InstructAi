@@ -36,19 +36,19 @@ export function SectorMultiSelect({
   const [open, setOpen] = useState(false);
 
   const selectedSectors = sectors.filter((sector) =>
-    selectedSectorIds.includes(sector.id)
+    selectedSectorIds.map(String).includes(String(sector.id))
   );
 
   const toggleSector = (sectorId: string) => {
-    const newSelection = selectedSectorIds.includes(sectorId)
-      ? selectedSectorIds.filter((id) => id !== sectorId)
-      : [...selectedSectorIds, sectorId];
+    const newSelection = selectedSectorIds.map(String).includes(String(sectorId))
+      ? selectedSectorIds.map(String).filter((id) => id !== String(sectorId))
+      : [...selectedSectorIds.map(String), String(sectorId)];
     onSelectionChange(newSelection);
   };
 
   const removeSector = (sectorId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    onSelectionChange(selectedSectorIds.filter((id) => id !== sectorId));
+    onSelectionChange(selectedSectorIds.map(String).filter((id) => id !== String(sectorId)));
   };
 
   const clearAll = (e: React.MouseEvent) => {
@@ -72,24 +72,29 @@ export function SectorMultiSelect({
               selectedSectors.map((sector) => (
                 <Badge key={sector.id} variant="secondary" className="gap-1">
                   {sector.name}
-                  <button
+                  <span
+                    role="button" tabIndex={0}
+                    aria-label={`Remover setor ${sector.name}`}
+                    onKeyDown={e => e.key === "Enter" && removeSector(sector.id, e as any)}
                     onClick={(e) => removeSector(sector.id, e)}
                     className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   >
                     <X className="h-3 w-3" />
-                  </button>
+                  </span>
                 </Badge>
               ))
             )}
           </div>
           <div className="flex items-center gap-1 ml-2">
             {selectedSectors.length > 0 && (
-              <button
+              <span
+                role="button" tabIndex={0} aria-label="Limpar setores"
+                onKeyDown={e => e.key === "Enter" && clearAll(e as any)}
                 onClick={clearAll}
                 className="ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
               >
                 <X className="h-4 w-4 opacity-50 hover:opacity-100" />
-              </button>
+              </span>
             )}
             <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
           </div>
@@ -102,7 +107,7 @@ export function SectorMultiSelect({
             <CommandEmpty>Nenhum setor encontrado.</CommandEmpty>
             <CommandGroup>
               {sectors.map((sector) => {
-                const isSelected = selectedSectorIds.includes(sector.id);
+                const isSelected = selectedSectorIds.map(String).includes(String(sector.id));
                 return (
                   <CommandItem
                     key={sector.id}

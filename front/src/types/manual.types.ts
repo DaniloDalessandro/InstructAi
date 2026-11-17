@@ -22,6 +22,11 @@ export interface Manual {
   updated_at: string;
   created_by: string;
   updated_by: string;
+  available_for_all_sectors: boolean;
+  allowed_sectors: string[];
+  available_from: string | null;
+  available_until: string | null;
+  availability_status: 'always' | 'scheduled' | 'active' | 'expired';
   user_permissions: UserPermissions;
 }
 
@@ -30,6 +35,10 @@ export interface ManualFormData {
   pdf_file: File | null;
   sectors: string[];
   tags: string[];
+  available_for_all_sectors: boolean;
+  allowed_sectors: string[];
+  available_from: string | null;
+  available_until: string | null;
 }
 
 export interface ManualListResponse {

@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import type { Tag, TagFormData } from "@/types/tag.types"
 
 interface TagFormProps {
@@ -33,6 +34,7 @@ const defaultColors = [
 
 export default function TagForm({ open, handleClose, initialData, onSubmit }: TagFormProps) {
   const [isLoading, setIsLoading] = useState(false)
+  const [isActive,setIsActive] = useState(true)
   const [formData, setFormData] = useState<TagFormData>({
     name: "",
     color: defaultColors[0],
@@ -40,11 +42,13 @@ export default function TagForm({ open, handleClose, initialData, onSubmit }: Ta
 
   useEffect(() => {
     if (initialData && open) {
+      setIsActive(initialData.is_active ?? true)
       setFormData({
         name: initialData.name || "",
         color: initialData.color || defaultColors[0],
       })
     } else if (!open) {
+      setIsActive(true)
       // Limpa o formulário ao fechar o diálogo
       setFormData({
         name: "",
@@ -74,7 +78,7 @@ export default function TagForm({ open, handleClose, initialData, onSubmit }: Ta
     setIsLoading(true)
 
     try {
-      await onSubmit(formData)
+      await onSubmit({...formData,is_active:isActive})
       handleClose()
     } catch (error) {
       console.error("Erro ao salvar tag:", error)
@@ -153,6 +157,7 @@ export default function TagForm({ open, handleClose, initialData, onSubmit }: Ta
             </div>
           </div>
 
+          {initialData && <div className="flex items-center justify-between pb-5"><Label htmlFor="item-active">Ativo</Label><Switch id="item-active" checked={isActive} onCheckedChange={setIsActive}/></div>}
           <DialogFooter className="flex justify-end gap-2">
             <Button
               type="button"

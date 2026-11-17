@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { formatDateTimeLocal } from '@/lib/utils/datetime';
 import {
   Dialog,
   DialogContent,
@@ -17,7 +18,9 @@ import { SectorMultiSelect } from '@/components/manual/SectorMultiSelect';
 import type { Sector } from '@/types/sector.types';
 import type { Tag } from '@/types/tag.types';
 import type { Manual, ManualFormData } from '@/types/manual.types';
-import { FileText, Upload, X, Loader2 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { MultiSelect } from '@/components/ui/multi-select';
+import { FileText, Upload, X, Loader2, Globe, Lock, CalendarRange } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 interface ManualFormProps {
@@ -33,7 +36,16 @@ export default function ManualForm({ open, handleClose, initialData, onSubmit }:
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [formData, setFormData] = useState({ name: '', sectors: [] as string[], tags: [] as string[] });
+  const [hasPeriodEnabled, setHasPeriodEnabled] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    sectors: [] as string[],
+    tags: [] as string[],
+    available_for_all_sectors: true,
+    allowed_sectors: [] as string[],
+    available_from: null as string | null,
+    available_until: null as string | null,
+  });
 
   useEffect(() => {
     if (open) loadFormData();
@@ -45,10 +57,16 @@ export default function ManualForm({ open, handleClose, initialData, onSubmit }:
         name: initialData.name || '',
         sectors: (initialData.sectors || []).map(String),
         tags: (initialData.tags || []).map(String),
+        available_for_all_sectors: initialData.available_for_all_sectors ?? true,
+        allowed_sectors: (initialData.allowed_sectors || []).map(String),
+        available_from: initialData.available_from || null,
+        available_until: initialData.available_until || null,
       });
+      setHasPeriodEnabled(!!(initialData.available_from || initialData.available_until));
       setSelectedFile(null);
     } else if (!open) {
-      setFormData({ name: '', sectors: [], tags: [] });
+      setFormData({ name: '', sectors: [], tags: [], available_for_all_sectors: true, allowed_sectors: [], available_from: null, available_until: null });
+      setHasPeriodEnabled(false);
       setSelectedFile(null);
     }
   }, [initialData, open]);
@@ -101,8 +119,18 @@ export default function ManualForm({ open, handleClose, initialData, onSubmit }:
 
     setIsLoading(true);
     try {
-      await onSubmit({ name: formData.name.trim(), sectors: formData.sectors, tags: formData.tags, pdf_file: selectedFile });
-      setFormData({ name: '', sectors: [], tags: [] });
+      await onSubmit({
+        name: formData.name.trim(),
+        sectors: formData.sectors,
+        tags: formData.tags,
+        pdf_file: selectedFile,
+        available_for_all_sectors: formData.available_for_all_sectors,
+        allowed_sectors: formData.available_for_all_sectors ? [] : formData.allowed_sectors,
+        available_from: formData.available_from,
+        available_until: formData.available_until,
+      });
+      setFormData({ name: '', sectors: [], tags: [], available_for_all_sectors: true, allowed_sectors: [], available_from: null, available_until: null });
+      setHasPeriodEnabled(false);
       setSelectedFile(null);
       handleClose();
     } catch {
@@ -243,6 +271,88 @@ export default function ManualForm({ open, handleClose, initialData, onSubmit }:
                   onSelectionChange={(ids) => setFormData((p) => ({ ...p, tags: ids }))}
                   placeholder="Selecione as tags..."
                 />
+              </div>
+
+              {/* Disponibilidade */}
+              <div className="space-y-3 pt-1">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Disponibilidade</p>
+
+                {/* Setores */}
+                <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
+                  <div className="flex items-center gap-2">
+                    <Globe className="h-4 w-4 text-muted-foreground" />
+                    <div className="space-y-0.5">
+                      <Label className="text-sm">Todos os setores</Label>
+                      <p className="text-xs text-muted-foreground">
+                        {formData.available_for_all_sectors ? 'Visível para todos os usuários' : 'Apenas setores selecionados'}
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={formData.available_for_all_sectors}
+                    onCheckedChange={(checked) =>
+                      setFormData((p) => ({ ...p, available_for_all_sectors: checked, allowed_sectors: [] }))
+                    }
+                  />
+                </div>
+                {!formData.available_for_all_sectors && (
+                  <div className="space-y-1.5 pl-1">
+                    <div className="flex items-center gap-1.5">
+                      <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                      <Label className="text-xs text-muted-foreground">Setores com acesso</Label>
+                    </div>
+                    <MultiSelect
+                      options={sectors.map((s) => ({ id: s.id.toString(), name: s.name }))}
+                      selected={formData.allowed_sectors}
+                      onChange={(vals) => setFormData((p) => ({ ...p, allowed_sectors: vals }))}
+                      placeholder="Selecione os setores..."
+                      emptyText="Nenhum setor encontrado"
+                    />
+                  </div>
+                )}
+
+                {/* Período */}
+                <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
+                  <div className="flex items-center gap-2">
+                    <CalendarRange className="h-4 w-4 text-muted-foreground" />
+                    <div className="space-y-0.5">
+                      <Label className="text-sm">Definir período</Label>
+                      <p className="text-xs text-muted-foreground">
+                        {hasPeriodEnabled ? 'Período definido' : 'Sem limite de tempo'}
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={hasPeriodEnabled}
+                    onCheckedChange={(checked) => {
+                      setHasPeriodEnabled(checked);
+                      if (!checked) setFormData((p) => ({ ...p, available_from: null, available_until: null }));
+                    }}
+                  />
+                </div>
+                {hasPeriodEnabled && (
+                  <div className="grid grid-cols-2 gap-3 pl-1">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Início</Label>
+                      <Input
+                        type="datetime-local"
+                        value={formatDateTimeLocal(formData.available_from)}
+                        onChange={(e) => setFormData((p) => ({ ...p, available_from: e.target.value || null }))}
+                        className="h-10 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Término</Label>
+                      <Input
+                        type="datetime-local"
+                        value={formatDateTimeLocal(formData.available_until)}
+                        onChange={(e) => setFormData((p) => ({ ...p, available_until: e.target.value || null }))}
+                        min={formatDateTimeLocal(formData.available_from) || undefined}
+                        className="h-10 text-sm"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

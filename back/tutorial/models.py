@@ -39,6 +39,26 @@ class Tutorial(models.Model):
     created_at = models.DateTimeField(default=timezone.now, verbose_name="Criado em")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
 
+    # ── Disponibilidade ──────────────────────────────────────
+    available_for_all_sectors = models.BooleanField(
+        default=True,
+        verbose_name='Disponível para todos os setores',
+    )
+    allowed_sectors = models.ManyToManyField(
+        'sectors.Sector',
+        blank=True,
+        related_name='allowed_tutorials',
+        verbose_name='Setores autorizados',
+    )
+    available_from = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Disponível a partir de',
+    )
+    available_until = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Disponível até',
+    )
+
     # ── Controle de acesso ──────────────────────────────────
     shared_admins = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
@@ -51,6 +71,17 @@ class Tutorial(models.Model):
         verbose_name = "Tutorial"
         verbose_name_plural = "Tutoriais"
         ordering = ['-created_at']
+
+    @property
+    def availability_status(self) -> str:
+        now = timezone.now()
+        if self.available_from and now < self.available_from:
+            return 'scheduled'
+        if self.available_until and now > self.available_until:
+            return 'expired'
+        if self.available_from or self.available_until:
+            return 'active'
+        return 'always'
 
     def __str__(self):
         return self.title

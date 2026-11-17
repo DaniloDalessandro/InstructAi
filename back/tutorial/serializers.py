@@ -1,8 +1,16 @@
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field, inline_serializer
+from drf_spectacular.types import OpenApiTypes
 from .models import Tutorial, TutorialStep, TutorialMedia
 from sectors.serializers import SectorSerializer
 from tags.serializers import TagSerializer
 from access.permissions import get_user_permissions
+
+_permissions_field = inline_serializer("TutorialUserPermissions", {
+    "can_edit": serializers.BooleanField(),
+    "can_delete": serializers.BooleanField(),
+    "can_manage_access": serializers.BooleanField(),
+})
 
 
 class TutorialMediaSerializer(serializers.ModelSerializer):
@@ -17,6 +25,7 @@ class TutorialMediaSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
+    @extend_schema_field(OpenApiTypes.URI)
     def get_file_url(self, obj):
         """Retorna a URL completa do arquivo"""
         if obj.file:
@@ -40,6 +49,7 @@ class TutorialStepSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
+    @extend_schema_field(OpenApiTypes.INT)
     def get_media_count(self, obj):
         """Retorna a quantidade de mídias no passo"""
         return obj.media.count()
@@ -59,13 +69,15 @@ class TutorialListSerializer(serializers.ModelSerializer):
             'id', 'title', 'description', 'sector', 'sector_detail',
             'tags', 'tags_detail', 'created_by', 'created_by_name',
             'step_count', 'is_active', 'created_at', 'updated_at',
-            'user_permissions',
+            'available_for_all_sectors', 'allowed_sectors', 'available_from', 'available_until',
+            'availability_status', 'user_permissions',
         ]
-        read_only_fields = ['id', 'created_by', 'created_at', 'updated_at', 'user_permissions']
+        read_only_fields = ['id', 'created_by', 'created_at', 'updated_at', 'availability_status', 'user_permissions']
 
-    def get_user_permissions(self, obj):
+    @extend_schema_field(_permissions_field)
+    def get_user_permissions(self, obj) -> dict[str, bool]:
         request = self.context.get('request')
-        if request and request.user:
+        if request and request.user and request.user.is_authenticated:
             return get_user_permissions(request.user, obj)
         return {"can_edit": False, "can_delete": False, "can_manage_access": False}
 
@@ -87,13 +99,15 @@ class TutorialDetailSerializer(serializers.ModelSerializer):
             'tags', 'tags_detail', 'created_by', 'created_by_name',
             'created_by_email', 'updated_by', 'steps', 'step_count',
             'is_active', 'created_at', 'updated_at',
-            'user_permissions',
+            'available_for_all_sectors', 'allowed_sectors', 'available_from', 'available_until',
+            'availability_status', 'user_permissions',
         ]
-        read_only_fields = ['id', 'created_by', 'created_at', 'updated_at', 'user_permissions']
+        read_only_fields = ['id', 'created_by', 'created_at', 'updated_at', 'availability_status', 'user_permissions']
 
-    def get_user_permissions(self, obj):
+    @extend_schema_field(_permissions_field)
+    def get_user_permissions(self, obj) -> dict[str, bool]:
         request = self.context.get('request')
-        if request and request.user:
+        if request and request.user and request.user.is_authenticated:
             return get_user_permissions(request.user, obj)
         return {"can_edit": False, "can_delete": False, "can_manage_access": False}
 
@@ -103,21 +117,27 @@ class TutorialCreateUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Tutorial
-        fields = ['id', 'title', 'description', 'sector', 'tags', 'is_active']
+        fields = [
+            'id', 'title', 'description', 'sector', 'tags', 'is_active',
+            'available_for_all_sectors', 'allowed_sectors', 'available_from', 'available_until',
+        ]
         read_only_fields = ['id']
 
     def create(self, validated_data):
         """Cria tutorial com o usuário atual como criador"""
         tags = validated_data.pop('tags', [])
+        allowed_sectors = validated_data.pop('allowed_sectors', [])
         validated_data['created_by'] = self.context['request'].user
         tutorial = Tutorial.objects.create(**validated_data)
         if tags:
             tutorial.tags.set(tags)
+        tutorial.allowed_sectors.set(allowed_sectors)
         return tutorial
 
     def update(self, instance, validated_data):
         """Atualiza tutorial registrando o responsável pela alteração"""
         tags = validated_data.pop('tags', None)
+        allowed_sectors = validated_data.pop('allowed_sectors', None)
         validated_data['updated_by'] = self.context['request'].user
 
         for attr, value in validated_data.items():
@@ -127,6 +147,8 @@ class TutorialCreateUpdateSerializer(serializers.ModelSerializer):
 
         if tags is not None:
             instance.tags.set(tags)
+        if allowed_sectors is not None:
+            instance.allowed_sectors.set(allowed_sectors)
 
         return instance
 

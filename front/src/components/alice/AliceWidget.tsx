@@ -6,6 +6,7 @@ import {
   useCallback,
   useState,
   type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
 } from "react"
 import { usePathname } from "next/navigation"
 import {
@@ -217,6 +218,51 @@ export function AliceWidget() {
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
+  // ── Draggable position ────────────────────────────────────
+  const [buttonY, setButtonY] = useState<number | null>(null)
+  const isDragging = useRef(false)
+  const dragStartY = useRef(0)
+  const dragStartButtonY = useRef(0)
+  const hasDragged = useRef(false)
+
+  useEffect(() => {
+    const stored = localStorage.getItem("alice-widget-y")
+    setButtonY(stored ? Math.min(Number(stored), window.innerHeight - 64) : window.innerHeight - 80)
+    const onResize = () =>
+      setButtonY(prev => (prev !== null ? Math.min(prev, window.innerHeight - 64) : window.innerHeight - 80))
+    window.addEventListener("resize", onResize)
+    return () => window.removeEventListener("resize", onResize)
+  }, [])
+
+  useEffect(() => {
+    if (buttonY !== null) localStorage.setItem("alice-widget-y", String(buttonY))
+  }, [buttonY])
+
+  const onDragStart = useCallback((e: ReactMouseEvent) => {
+    isDragging.current = true
+    hasDragged.current = false
+    dragStartY.current = e.clientY
+    dragStartButtonY.current = buttonY ?? window.innerHeight - 80
+    e.preventDefault()
+  }, [buttonY])
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!isDragging.current) return
+      const delta = e.clientY - dragStartY.current
+      if (Math.abs(delta) > 4) hasDragged.current = true
+      const clamped = Math.max(8, Math.min(window.innerHeight - 64, dragStartButtonY.current + delta))
+      setButtonY(clamped)
+    }
+    const onUp = () => { isDragging.current = false }
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseup", onUp)
+    return () => {
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("mouseup", onUp)
+    }
+  }, [])
+
   // autoscroll on new messages
   useEffect(() => {
     if (scrollRef.current) {
@@ -331,7 +377,9 @@ export function AliceWidget() {
     <>
       {/* ── Floating Button ────────────────────────────────── */}
       <button
+        onMouseDown={onDragStart}
         onClick={() => {
+          if (hasDragged.current) return
           if (isOpen && isCollapsed) {
             setIsCollapsed(false)
           } else if (isOpen) {
@@ -343,14 +391,19 @@ export function AliceWidget() {
         }}
         aria-label="Abrir Alice"
         className={cn(
-          "fixed bottom-6 right-6 z-50 w-14 h-14 rounded-2xl shadow-2xl",
+          "z-50 w-14 h-14 rounded-2xl shadow-2xl",
           "flex items-center justify-center",
-          "transition-all duration-300 ease-out",
+          "transition-[transform,opacity,box-shadow] duration-300 ease-out",
           "hover:scale-110 hover:shadow-primary/40",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+          "select-none",
           isOpen && !isCollapsed ? "scale-90 opacity-80" : "scale-100",
         )}
         style={{
+          position: "fixed",
+          top: buttonY ?? undefined,
+          right: "1.5rem",
+          cursor: "grab",
           background: "linear-gradient(135deg, #5e6ad2 0%, #7c3aed 100%)",
           boxShadow: isOpen && !isCollapsed
             ? "0 4px 24px rgba(94,106,210,0.4)"
@@ -371,8 +424,11 @@ export function AliceWidget() {
       {/* ── Minimized pill (beside button) ─────────────────── */}
       {isOpen && isCollapsed && (
         <div
-          className="fixed bottom-6 right-[5.5rem] z-50 h-14 flex items-center gap-2.5 px-3 pr-2 rounded-2xl cursor-pointer transition-all duration-200"
+          className="z-50 h-14 flex items-center gap-2.5 px-3 pr-2 rounded-2xl cursor-pointer transition-all duration-200"
           style={{
+            position: "fixed",
+            top: buttonY ?? undefined,
+            right: "5.5rem",
             background: "linear-gradient(135deg, #5e6ad2 0%, #7c3aed 100%)",
             boxShadow: "0 8px 32px rgba(94,106,210,0.5), 0 2px 8px rgba(0,0,0,0.2)",
           }}
@@ -406,15 +462,20 @@ export function AliceWidget() {
       <div
         ref={panelRef}
         className={cn(
-          "fixed bottom-24 right-6 z-50 w-[380px] max-w-[calc(100vw-1.5rem)]",
+          "z-50 w-[380px] max-w-[calc(100vw-1.5rem)]",
           "flex flex-col rounded-2xl border border-border/60 bg-background",
           "shadow-2xl shadow-black/20",
-          "transition-all duration-300 ease-out origin-bottom-right",
+          "transition-[opacity,transform] duration-300 ease-out origin-bottom-right",
           isOpen && !isCollapsed
             ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
             : "opacity-0 scale-95 translate-y-2 pointer-events-none",
         )}
-        style={{ height: "min(600px, calc(100vh - 8rem))" }}
+        style={{
+          position: "fixed",
+          right: "1.5rem",
+          bottom: buttonY !== null ? `calc(100vh - ${buttonY}px + 8px)` : "6rem",
+          height: "min(600px, calc(100vh - 8rem))",
+        }}
       >
         {/* ── Header ─────────────────────────────────────── */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border/50 shrink-0 rounded-t-2xl"

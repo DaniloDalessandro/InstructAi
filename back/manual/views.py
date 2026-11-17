@@ -1,19 +1,44 @@
-from rest_framework import viewsets, filters, status
+from rest_framework import viewsets, filters, status, serializers as s
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db.models import Q
+from django.utils import timezone
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, inline_serializer
+from drf_spectacular.types import OpenApiTypes
 from access.permissions import ContentPermission, CanManageAccess
 from .models import Manual
 from .serializers import ManualSerializer
 
+_shared_admins_response = inline_serializer("ManualSharedAdmins", {
+    "shared_admins": inline_serializer("ManualAdminInfo", {
+        "id": s.IntegerField(),
+        "email": s.EmailField(),
+        "name": s.CharField(),
+    }, many=True),
+})
 
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Manuais"],
+        summary="Lista manuais",
+        parameters=[
+            OpenApiParameter("tags", OpenApiTypes.INT, many=True, description="Filtra por tag (AND)"),
+            OpenApiParameter("sectors", OpenApiTypes.INT, description="Filtra por setor"),
+            OpenApiParameter("is_active", OpenApiTypes.BOOL, description="Filtra por status"),
+            OpenApiParameter("search", OpenApiTypes.STR, description="Busca por nome"),
+        ],
+    ),
+    retrieve=extend_schema(tags=["Manuais"], summary="Detalha manual"),
+    create=extend_schema(tags=["Manuais"], summary="Faz upload de manual PDF"),
+    update=extend_schema(tags=["Manuais"], summary="Atualiza manual"),
+    partial_update=extend_schema(tags=["Manuais"], summary="Atualiza manual parcialmente"),
+    destroy=extend_schema(tags=["Manuais"], summary="Inativa manual (soft delete)", responses={204: None}),
+)
 class ManualViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet para o modelo Manual.
-    Fornece operações CRUD com upload de arquivo PDF e soft delete (inativação).
-    """
     queryset = Manual.objects.all().prefetch_related('sectors', 'tags')
     serializer_class = ManualSerializer
     permission_classes = [IsAuthenticated, ContentPermission]
@@ -25,13 +50,10 @@ class ManualViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
 
     def get_queryset(self):
-        """
-        Retorna queryset baseado nos filtros.
-        Tags são filtradas cumulativamente (AND): um manual precisa ter TODAS as tags
-        marcadas para aparecer no resultado.
-        Se não houver filtro is_active, retorna apenas manuais ativos por padrão.
-        """
-        queryset = Manual.objects.all().prefetch_related('sectors', 'tags')
+        user = self.request.user
+        now = timezone.now()
+
+        queryset = Manual.objects.all().prefetch_related('sectors', 'tags', 'allowed_sectors')
         is_active = self.request.query_params.get('is_active', None)
 
         # Filtro de status
@@ -42,8 +64,28 @@ class ManualViewSet(viewsets.ModelViewSet):
         elif is_active.lower() in ['false', '0', 'no']:
             queryset = queryset.filter(is_active=False)
 
-        # Filtro AND de tags: encadeia um filter por tag para garantir
-        # que o manual tenha TODAS as tags selecionadas
+        # Admins veem todos
+        if not (user.is_staff or user.is_superuser):
+            # Filtro de setor
+            user_sector_id = getattr(user, 'sector_id', None)
+            if user_sector_id:
+                sector_q = Q(available_for_all_sectors=True) | Q(allowed_sectors=user_sector_id)
+            else:
+                sector_q = Q(available_for_all_sectors=True)
+
+            # Filtro de período
+            time_q = (
+                Q(available_from__isnull=True) | Q(available_from__lte=now)
+            ) & (
+                Q(available_until__isnull=True) | Q(available_until__gte=now)
+            )
+
+            # Owners e shared_admins bypassam filtros de setor/data
+            owned_q = Q(owner=user) | Q(shared_admins=user)
+
+            queryset = queryset.filter(owned_q | (sector_q & time_q)).distinct()
+
+        # Filtro AND de tags
         tag_ids = self.request.query_params.getlist('tags')
         for tag_id in tag_ids:
             if tag_id:
@@ -71,12 +113,17 @@ class ManualViewSet(viewsets.ModelViewSet):
         instance.save()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    @extend_schema(
+        tags=["Manuais"],
+        summary="Gerencia administradores delegados do manual",
+        request=inline_serializer("ManualShareRequest", {
+            "add": s.ListField(child=s.EmailField(), required=False),
+            "remove": s.ListField(child=s.EmailField(), required=False),
+        }),
+        responses={200: _shared_admins_response},
+    )
     @action(detail=True, methods=['get', 'post'], permission_classes=[IsAuthenticated, CanManageAccess])
     def share(self, request, pk=None):
-        """
-        GET  — lista os administradores delegados.
-        POST — { "add": ["email@..."], "remove": ["email@..."] }
-        """
         from django.contrib.auth import get_user_model
         from access.models import log_action
 

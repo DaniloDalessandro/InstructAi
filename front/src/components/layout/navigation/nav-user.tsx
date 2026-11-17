@@ -23,7 +23,7 @@ import { useTheme } from "@/contexts/ThemeContext"
 import { UserProfileForm } from "@/components/forms/UserProfileForm"
 import { ChangePasswordForm } from "@/components/forms/ChangePasswordForm"
 import { useRouter } from "next/navigation"
-import { cn } from "@/lib/utils/utils"
+import { cn } from "@/lib/utils"
 
 export function NavUser({
   user,

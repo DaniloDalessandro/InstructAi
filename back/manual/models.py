@@ -16,6 +16,26 @@ class Manual(models.Model):
     created_by = models.CharField(max_length=150, null=True, blank=True, verbose_name='Criado por')
     updated_by = models.CharField(max_length=150, null=True, blank=True, verbose_name='Atualizado por')
 
+    # ── Disponibilidade ──────────────────────────────────────
+    available_for_all_sectors = models.BooleanField(
+        default=True,
+        verbose_name='Disponível para todos os setores',
+    )
+    allowed_sectors = models.ManyToManyField(
+        Sector,
+        blank=True,
+        related_name='allowed_manuals',
+        verbose_name='Setores autorizados',
+    )
+    available_from = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Disponível a partir de',
+    )
+    available_until = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Disponível até',
+    )
+
     # ── Controle de acesso ──────────────────────────────────
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -35,6 +55,18 @@ class Manual(models.Model):
         verbose_name = 'Manual'
         verbose_name_plural = 'Manuais'
         ordering = ['-created_at']
+
+    @property
+    def availability_status(self):
+        from django.utils import timezone as tz
+        now = tz.now()
+        if self.available_from and now < self.available_from:
+            return 'scheduled'
+        if self.available_until and now > self.available_until:
+            return 'expired'
+        if self.available_from or self.available_until:
+            return 'active'
+        return 'always'
 
     def __str__(self):
         return self.name
