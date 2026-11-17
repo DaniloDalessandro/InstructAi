@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { formatDateTimeLocal } from '@/lib/utils/datetime';
 import Image from 'next/image';
 import {
   Dialog,
@@ -27,8 +28,10 @@ import { TagMultiSelect } from '@/components/manual/TagMultiSelect';
 import type { Sector } from '@/types/sector.types';
 import type { Tag } from '@/types/tag.types';
 import type { Course, CourseFormData } from '@/types/course.types';
-import { Loader2, Plus, Trash2, Check, ArrowLeft, ArrowRight, Edit2, X, Lock, CheckCircle2 } from 'lucide-react';
-import { createCourse, createLesson, createQuestion } from '@/lib/api/courses';
+import { Loader2, Plus, Trash2, Check, ArrowLeft, ArrowRight, Edit2, X, Lock, CheckCircle2, Mail, Globe, CalendarRange } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { MultiSelect } from '@/components/ui/multi-select';
+import { createCourse, updateCourse, createLesson, updateLesson, deleteLesson, createQuestion, updateQuestion, deleteQuestion } from '@/lib/api/courses';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import {
@@ -37,27 +40,35 @@ import {
 } from '@/components/ui/radio-group';
 
 interface LessonInput {
+  id?: string; // existing lesson id when editing
   name: string;
   youtube_url: string;
 }
 
 interface QuestionInput {
+  id?: string; // existing question id when editing
   text: string;
-  options: string[];
-  correct_option: number; // 0-based index
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
+  correct_option: 'A' | 'B' | 'C' | 'D';
 }
 
 interface CourseStepperFormProps {
   open: boolean;
   handleClose: () => void;
   onSuccess: () => void;
+  editCourse?: Course;
 }
 
 export default function CourseStepperForm({
   open,
   handleClose,
   onSuccess,
+  editCourse,
 }: CourseStepperFormProps) {
+  const isEditMode = !!editCourse;
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
@@ -66,6 +77,8 @@ export default function CourseStepperForm({
   const [createdCourseId, setCreatedCourseId] = useState<string | null>(null);
   const [lessons, setLessons] = useState<LessonInput[]>([]);
   const [questions, setQuestions] = useState<QuestionInput[]>([]);
+  const [deletedLessonIds, setDeletedLessonIds] = useState<string[]>([]);
+  const [deletedQuestionIds, setDeletedQuestionIds] = useState<string[]>([]);
 
   // Estado para gerenciamento de aulas (Step 2)
   const [editingLessonIndex, setEditingLessonIndex] = useState<number | null>(null);
@@ -78,9 +91,13 @@ export default function CourseStepperForm({
   const [editingQuestionIndex, setEditingQuestionIndex] = useState<number | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState<QuestionInput>({
     text: '',
-    options: ['', ''],
-    correct_option: 0,
-  });
+    option_a: '',
+    option_b: '',
+    option_c: '',
+    option_d: '',
+    correct_option: 'A',
+  } as any);
+  const [optionCount, setOptionCount] = useState(2);
   const [formData, setFormData] = useState<{
     name: string;
     description: string;
@@ -90,6 +107,11 @@ export default function CourseStepperForm({
     passing_score: number;
     workload_hours: number;
     exam_duration_minutes: number;
+    available_for_all_sectors: boolean;
+    allowed_sectors: string[];
+    available_from: string | null;
+    available_until: string | null;
+    send_email_notification: boolean;
   }>({
     name: '',
     description: '',
@@ -99,14 +121,61 @@ export default function CourseStepperForm({
     passing_score: 70,
     workload_hours: 0,
     exam_duration_minutes: 60,
+    available_for_all_sectors: true,
+    allowed_sectors: [],
+    available_from: null,
+    available_until: null,
+    send_email_notification: false,
   });
 
-  // Load sectors and tags
+  // Load sectors and tags; populate from editCourse if editing
   useEffect(() => {
     if (open) {
       loadFormData();
+      if (editCourse) {
+        setCreatedCourseId(editCourse.id);
+        setFormData({
+          name: editCourse.name,
+          description: editCourse.description,
+          sector: String(editCourse.sector),
+          tags: editCourse.tags.map(String),
+          has_final_exam: editCourse.has_final_exam,
+          passing_score: editCourse.passing_score,
+          workload_hours: editCourse.workload_hours,
+          exam_duration_minutes: editCourse.exam_duration_minutes,
+          available_for_all_sectors: editCourse.available_for_all_sectors,
+          allowed_sectors: editCourse.allowed_sectors.map(String),
+          available_from: editCourse.available_from,
+          available_until: editCourse.available_until,
+          send_email_notification: false,
+        });
+        setLessons(
+          (editCourse.lessons || []).map((l) => ({
+            id: l.id,
+            name: l.name,
+            youtube_url: l.youtube_url,
+          }))
+        );
+        const existingQuestions: QuestionInput[] = (editCourse.questions || []).map((q) => ({
+          id: q.id,
+          text: q.text,
+          option_a: q.options[0] || '',
+          option_b: q.options[1] || '',
+          option_c: q.options[2] || '',
+          option_d: q.options[3] || '',
+          correct_option: ((['A', 'B', 'C', 'D'] as const)[q.correct_option] ?? 'A') as 'A' | 'B' | 'C' | 'D',
+        }));
+        setQuestions(existingQuestions);
+        if (existingQuestions.length > 0) {
+          const firstQ = editCourse.questions[0];
+          setOptionCount(Math.min(Math.max(firstQ.options.length, 2), 4));
+        }
+        setHasPeriodEnabled(!!(editCourse.available_from || editCourse.available_until));
+        setDeletedLessonIds([]);
+        setDeletedQuestionIds([]);
+      }
     }
-  }, [open]);
+  }, [open, editCourse]);
 
   // Reset form when dialog closes
   useEffect(() => {
@@ -122,13 +191,22 @@ export default function CourseStepperForm({
         passing_score: 70,
         workload_hours: 0,
         exam_duration_minutes: 60,
+        available_for_all_sectors: true,
+        allowed_sectors: [],
+        available_from: null,
+        available_until: null,
+        send_email_notification: false,
       });
       setLessons([]);
       setQuestions([]);
+      setDeletedLessonIds([]);
+      setDeletedQuestionIds([]);
       setEditingLessonIndex(null);
       setCurrentLesson({ name: '', youtube_url: '' });
       setEditingQuestionIndex(null);
-      setCurrentQuestion({ text: '', options: ['', ''], correct_option: 0 });
+      setCurrentQuestion({ text: '', option_a: '', option_b: '', option_c: '', option_d: '', correct_option: 'A' } as any);
+      setOptionCount(2);
+      setHasPeriodEnabled(false);
     }
   }, [open]);
 
@@ -217,6 +295,10 @@ export default function CourseStepperForm({
   };
 
   const handleDeleteLesson = (index: number) => {
+    const lesson = lessons[index];
+    if (lesson.id) {
+      setDeletedLessonIds((prev) => [...prev, lesson.id!]);
+    }
     setLessons(lessons.filter((_, i) => i !== index));
     if (editingLessonIndex === index) {
       handleCancelEdit();
@@ -308,6 +390,10 @@ export default function CourseStepperForm({
   };
 
   const handleDeleteQuestion = (index: number) => {
+    const question = questions[index];
+    if (question.id) {
+      setDeletedQuestionIds((prev) => [...prev, question.id!]);
+    }
     setQuestions(questions.filter((_, i) => i !== index));
     if (editingQuestionIndex === index) {
       handleCancelEditQuestion();
@@ -319,8 +405,8 @@ export default function CourseStepperForm({
   };
 
   const handleSaveStep1 = async () => {
-    // Se já existe um curso criado, apenas avançar para o Step 2
-    if (createdCourseId) {
+    // Em modo criação, se o curso já foi criado, apenas avançar
+    if (createdCourseId && !isEditMode) {
       setCurrentStep(2);
       return;
     }
@@ -405,17 +491,25 @@ export default function CourseStepperForm({
         workload_hours: formData.workload_hours,
         exam_duration_minutes: formData.has_final_exam ? formData.exam_duration_minutes : 60,
         is_active: true,
+        available_for_all_sectors: formData.available_for_all_sectors,
+        allowed_sectors: formData.allowed_sectors,
+        available_from: formData.available_from,
+        available_until: formData.available_until,
+        send_email_notification: false, // será atualizado no último step
       };
 
-      const course = await createCourse(submitData);
-      setCreatedCourseId(course.id);
+      if (isEditMode) {
+        await updateCourse(createdCourseId!, submitData);
+      } else {
+        const course = await createCourse(submitData);
+        setCreatedCourseId(course.id);
+      }
 
       toast({
         title: 'Sucesso',
         description: 'Informações do curso salvas com sucesso',
       });
 
-      // Avançar automaticamente para o Step 2
       setCurrentStep(2);
     } catch (error: any) {
       console.error('Erro ao salvar curso:', error);
@@ -474,32 +568,21 @@ export default function CourseStepperForm({
     setIsLoading(true);
 
     try {
-      // Criar as aulas
-      const lessonPromises = lessons.map((lesson, index) =>
-        createLesson({
-          course: createdCourseId!,
-          name: lesson.name,
-          youtube_url: lesson.youtube_url,
-          order: index + 1,
-          is_active: true,
-        })
-      );
-
-      await Promise.all(lessonPromises);
+      await Promise.all(deletedLessonIds.map(id => deleteLesson(id)));
+      setDeletedLessonIds([]);
+      for (let index = 0; index < lessons.length; index++) {
+        const lesson = lessons[index];
+        const data = { course: createdCourseId!, name: lesson.name, youtube_url: lesson.youtube_url, order: index + 1, is_active: true };
+        const saved = lesson.id ? await updateLesson(lesson.id, data) : await createLesson(data);
+        setLessons(previous => previous.map((item, i) => i === index ? { ...item, id: saved.id } : item));
+      }
 
       toast({
         title: 'Sucesso',
-        description: 'Aulas cadastradas com sucesso',
+        description: 'Aulas salvas com sucesso',
       });
 
-      // Se o curso tem prova final, ir para step 3
-      if (formData.has_final_exam) {
-        setCurrentStep(3);
-      } else {
-        // Caso contrário, finalizar
-        onSuccess();
-        handleClose();
-      }
+      setCurrentStep(3);
     } catch (error: any) {
       console.error('Erro ao salvar aulas:', error);
       toast({
@@ -533,7 +616,7 @@ export default function CourseStepperForm({
         });
         return;
       }
-      if (!q.option_a.trim() || !q.option_b.trim() || !q.option_c.trim() || !q.option_d.trim()) {
+      if (getActiveOptionFields().some(field => !String(q[field]).trim())) {
         toast({
           title: 'Validação',
           description: `Todas as opções da questão ${i + 1} são obrigatórias`,
@@ -546,29 +629,29 @@ export default function CourseStepperForm({
     setIsLoading(true);
 
     try {
-      // Criar as questões
-      const questionPromises = questions.map((question, index) =>
-        createQuestion({
-          course: createdCourseId!,
-          text: question.text,
-          option_a: question.option_a,
-          option_b: question.option_b,
-          option_c: question.option_c,
-          option_d: question.option_d,
-          correct_option: question.correct_option,
-          order: index + 1,
-        })
-      );
+      const buildQuestionPayload = (question: QuestionInput, index: number) => ({
+        course: createdCourseId!,
+        text: question.text,
+        options: [question.option_a, question.option_b, question.option_c, question.option_d].slice(0, optionCount),
+        correct_option: ['A', 'B', 'C', 'D'].indexOf(question.correct_option),
+        order: index + 1,
+      } as any);
 
-      await Promise.all(questionPromises);
+      await Promise.all(deletedQuestionIds.map(id => deleteQuestion(id)));
+      setDeletedQuestionIds([]);
+      for (let index = 0; index < questions.length; index++) {
+        const question = questions[index];
+        const payload = buildQuestionPayload(question, index);
+        const saved = question.id ? await updateQuestion(question.id, payload) : await createQuestion(payload);
+        setQuestions(previous => previous.map((item, i) => i === index ? { ...item, id: saved.id } : item));
+      }
 
       toast({
         title: 'Sucesso',
-        description: 'Questões da prova cadastradas com sucesso',
+        description: 'Questões da prova salvas com sucesso',
       });
 
-      onSuccess();
-      handleClose();
+      setCurrentStep(4);
     } catch (error: any) {
       console.error('Erro ao salvar questões:', error);
       toast({
@@ -581,17 +664,60 @@ export default function CourseStepperForm({
     }
   };
 
+  const availabilityStep = formData.has_final_exam ? 4 : 3;
+
+  const handleSaveAvailabilityStep = async () => {
+    setIsLoading(true);
+    try {
+      const payload: CourseFormData = {
+        name: formData.name.trim(),
+        description: formData.description.trim(),
+        sector: formData.sector,
+        tags: formData.tags,
+        has_final_exam: formData.has_final_exam,
+        passing_score: formData.has_final_exam ? formData.passing_score : 70,
+        workload_hours: formData.workload_hours,
+        exam_duration_minutes: formData.has_final_exam ? formData.exam_duration_minutes : 60,
+        is_active: true,
+        available_for_all_sectors: formData.available_for_all_sectors,
+        allowed_sectors: formData.available_for_all_sectors ? [] : formData.allowed_sectors,
+        available_from: formData.available_from || null,
+        available_until: formData.available_until || null,
+        send_email_notification: formData.send_email_notification,
+      };
+
+      await updateCourse(createdCourseId!, payload);
+
+      toast({
+        title: 'Sucesso',
+        description: isEditMode ? 'Curso atualizado com sucesso' : 'Curso cadastrado com sucesso',
+      });
+
+      onSuccess();
+      handleClose();
+    } catch (error: any) {
+      toast({
+        title: 'Erro',
+        description: error?.message || 'Erro ao salvar disponibilidade',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const renderStepIndicator = () => {
     const canGoToStep = (step: number) => {
-      // Pode ir para qualquer etapa já visitada ou a atual
-      if (step === 1) return true; // Sempre pode voltar para step 1
-      if (step === 2) return createdCourseId !== null; // Só pode ir para step 2 se já criou o curso
-      if (step === 3) return formData.has_final_exam && lessons.length > 0; // Só pode ir para step 3 se tiver prova e aulas
+      if (isEditMode) return true;
+      if (step === 1) return true;
+      if (step === 2) return createdCourseId !== null;
+      if (step === 3) return createdCourseId !== null && lessons.length > 0;
+      if (step === 4) return formData.has_final_exam && questions.length > 0;
       return false;
     };
 
     return (
-      <div className="flex items-center justify-center gap-2 mb-6">
+      <div className="shrink-0 flex items-center gap-2 mb-2 overflow-x-auto py-1">
         {/* Step 1 */}
         <div
           className="flex items-center gap-2 cursor-pointer group"
@@ -642,7 +768,7 @@ export default function CourseStepperForm({
           <>
             <div className="w-12 h-0.5 bg-border" />
 
-            {/* Step 3 */}
+            {/* Step 3 - Questões */}
             <div
               className={`flex items-center gap-2 ${
                 canGoToStep(3) ? 'cursor-pointer group' : 'cursor-not-allowed opacity-50'
@@ -653,10 +779,12 @@ export default function CourseStepperForm({
                 className={`flex items-center justify-center w-8 h-8 rounded-full transition-all ${
                   currentStep === 3
                     ? 'bg-primary text-primary-foreground'
+                    : currentStep > 3
+                    ? 'bg-green-500 text-white group-hover:scale-110'
                     : 'bg-muted text-muted-foreground group-hover:bg-primary/80 group-hover:text-white'
                 }`}
               >
-                3
+                {currentStep > 3 ? <Check className="h-4 w-4" /> : '3'}
               </div>
               <span className={`text-sm font-medium ${
                 canGoToStep(3) ? 'group-hover:text-primary transition-colors' : ''
@@ -666,6 +794,32 @@ export default function CourseStepperForm({
             </div>
           </>
         )}
+
+        {/* Step de Disponibilidade - sempre o último */}
+        <>
+          <div className="w-12 h-0.5 bg-border" />
+          <div
+            className={`flex items-center gap-2 ${
+              canGoToStep(availabilityStep) ? 'cursor-pointer group' : 'cursor-not-allowed opacity-50'
+            }`}
+            onClick={() => canGoToStep(availabilityStep) && setCurrentStep(availabilityStep)}
+          >
+            <div
+              className={`flex items-center justify-center w-8 h-8 rounded-full transition-all ${
+                currentStep === availabilityStep
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground group-hover:bg-primary/80 group-hover:text-white'
+              }`}
+            >
+              {availabilityStep}
+            </div>
+            <span className={`text-sm font-medium ${
+              canGoToStep(availabilityStep) ? 'group-hover:text-primary transition-colors' : ''
+            }`}>
+              Disponibilidade
+            </span>
+          </div>
+        </>
       </div>
     );
   };
@@ -755,7 +909,7 @@ export default function CourseStepperForm({
             </SelectTrigger>
             <SelectContent>
               {sectors.map((sector) => (
-                <SelectItem key={sector.id} value={sector.id}>
+                <SelectItem key={sector.id} value={String(sector.id)}>
                   {sector.name}
                 </SelectItem>
               ))}
@@ -1374,12 +1528,138 @@ export default function CourseStepperForm({
     );
   };
 
+  const [hasPeriodEnabled, setHasPeriodEnabled] = useState(false);
+
+  const renderStepAvailability = () => (
+    <div className="grid gap-6 py-6">
+      {/* Setores */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
+          <div className="flex items-center gap-2">
+            <Globe className="h-4 w-4 text-muted-foreground" />
+            <div className="space-y-0.5">
+              <Label htmlFor="all-sectors">Todos os setores</Label>
+              <p className="text-xs text-muted-foreground">
+                {formData.available_for_all_sectors
+                  ? 'Visível para todos os usuários'
+                  : 'Apenas setores selecionados'}
+              </p>
+            </div>
+          </div>
+          <Switch
+            id="all-sectors"
+            checked={formData.available_for_all_sectors}
+            onCheckedChange={(checked) =>
+              setFormData({ ...formData, available_for_all_sectors: checked, allowed_sectors: [] })
+            }
+          />
+        </div>
+
+        {!formData.available_for_all_sectors && (
+          <div className="space-y-2 pl-1">
+            <div className="flex items-center gap-1.5">
+              <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+              <Label className="text-xs text-muted-foreground">Setores com acesso</Label>
+            </div>
+            <MultiSelect
+              options={sectors.map((s) => ({ id: s.id.toString(), name: s.name }))}
+              selected={formData.allowed_sectors}
+              onChange={(vals) => setFormData({ ...formData, allowed_sectors: vals })}
+              placeholder="Selecione os setores..."
+              emptyText="Nenhum setor encontrado"
+            />
+            {formData.allowed_sectors.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {formData.allowed_sectors.length} setor(es) selecionado(s)
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Período */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
+          <div className="flex items-center gap-2">
+            <CalendarRange className="h-4 w-4 text-muted-foreground" />
+            <div className="space-y-0.5">
+              <Label htmlFor="has-period">Definir período</Label>
+              <p className="text-xs text-muted-foreground">
+                {hasPeriodEnabled ? 'Período definido' : 'Sem limite de tempo'}
+              </p>
+            </div>
+          </div>
+          <Switch
+            id="has-period"
+            checked={hasPeriodEnabled}
+            onCheckedChange={(checked) => {
+              setHasPeriodEnabled(checked);
+              if (!checked) {
+                setFormData({ ...formData, available_from: null, available_until: null });
+              }
+            }}
+          />
+        </div>
+
+        {hasPeriodEnabled && (
+          <div className="grid grid-cols-2 gap-3 pl-1">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Início</Label>
+              <Input
+                type="datetime-local"
+                value={formatDateTimeLocal(formData.available_from)}
+                onChange={(e) =>
+                  setFormData({ ...formData, available_from: e.target.value || null })
+                }
+                className="h-10 text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Término</Label>
+              <Input
+                type="datetime-local"
+                value={formatDateTimeLocal(formData.available_until)}
+                onChange={(e) =>
+                  setFormData({ ...formData, available_until: e.target.value || null })
+                }
+                min={formatDateTimeLocal(formData.available_from) || undefined}
+                className="h-10 text-sm"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Notificação por e-mail */}
+      <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
+        <div className="flex items-center gap-2">
+          <Mail className="h-4 w-4 text-muted-foreground" />
+          <div className="space-y-0.5">
+            <Label htmlFor="send-email">Notificação por e-mail</Label>
+            <p className="text-xs text-muted-foreground">
+              {formData.send_email_notification
+                ? 'Enviar e-mail para os usuários com acesso'
+                : 'Não enviar notificação'}
+            </p>
+          </div>
+        </div>
+        <Switch
+          id="send-email"
+          checked={formData.send_email_notification}
+          onCheckedChange={(checked) =>
+            setFormData({ ...formData, send_email_notification: checked })
+          }
+        />
+      </div>
+    </div>
+  );
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[1140px] max-w-[95vw] max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="sm:max-w-[1140px] max-w-[95vw] h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold text-primary">
-            Novo Curso
+            {isEditMode ? 'Editar Curso' : 'Novo Curso'}
           </DialogTitle>
           <hr className="mt-2 border-b border-gray-200" />
         </DialogHeader>
@@ -1398,10 +1678,12 @@ export default function CourseStepperForm({
             <div className={`flex-1 min-h-0 ${currentStep === 2 || currentStep === 3 ? 'overflow-hidden flex flex-col' : 'overflow-y-auto'}`}>
               {currentStep === 1 && renderStep1()}
               {currentStep === 2 && renderStep2()}
-              {currentStep === 3 && renderStep3()}
+              {currentStep === 3 && formData.has_final_exam && renderStep3()}
+              {currentStep === 3 && !formData.has_final_exam && renderStepAvailability()}
+              {currentStep === 4 && renderStepAvailability()}
             </div>
 
-            <DialogFooter className="flex justify-between gap-2">
+            <DialogFooter className="shrink-0 flex justify-between gap-2">
               {currentStep === 1 ? (
                 <>
                   <Button
@@ -1413,7 +1695,7 @@ export default function CourseStepperForm({
                     Cancelar
                   </Button>
                   <div className="flex gap-2">
-                    {createdCourseId ? (
+                    {createdCourseId && !isEditMode ? (
                       <Button
                         type="button"
                         onClick={handleGoToStep2}
@@ -1461,20 +1743,15 @@ export default function CourseStepperForm({
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         Salvando...
                       </>
-                    ) : formData.has_final_exam ? (
+                    ) : (
                       <>
                         Salvar e Continuar
                         <ArrowRight className="h-4 w-4 ml-2" />
                       </>
-                    ) : (
-                      <>
-                        <Check className="h-4 w-4 mr-2" />
-                        Finalizar Cadastro
-                      </>
                     )}
                   </Button>
                 </>
-              ) : (
+              ) : currentStep === 3 && formData.has_final_exam ? (
                 <>
                   <Button
                     type="button"
@@ -1497,8 +1774,38 @@ export default function CourseStepperForm({
                       </>
                     ) : (
                       <>
+                        Salvar e Continuar
+                        <ArrowRight className="h-4 w-4 ml-2" />
+                      </>
+                    )}
+                  </Button>
+                </>
+              ) : (
+                // Step de disponibilidade (step 3 sem prova ou step 4 com prova)
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setCurrentStep(currentStep === 4 ? 3 : 2)}
+                    disabled={isLoading}
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Voltar
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleSaveAvailabilityStep}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Salvando...
+                      </>
+                    ) : (
+                      <>
                         <Check className="h-4 w-4 mr-2" />
-                        Finalizar Cadastro
+                        {isEditMode ? 'Salvar Alterações' : 'Finalizar Cadastro'}
                       </>
                     )}
                   </Button>

@@ -1,23 +1,19 @@
-"""
-Views da Alice — chat síncrono e streaming SSE.
-"""
 import json
-import time
 import logging
 
 from django.http import StreamingHttpResponse
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, serializers as s
 from rest_framework.permissions import IsAuthenticated
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse, inline_serializer
+from drf_spectacular.types import OpenApiTypes
 
 from .models import ConversationSession, Message
-from .services.alice_agent import run_alice, stream_alice
+from .services.alice_agent import stream_alice
 
 logger = logging.getLogger(__name__)
 
-
-# ── Helpers ─────────────────────────────────────────────────────────────────
 
 def _get_or_create_session(user, session_id_str=None, create_new=False):
     """Retorna sessão existente ou cria nova."""
@@ -49,48 +45,50 @@ def _persist_messages(session, user_message: str, ai_response: str):
         session.save(update_fields=["title"])
 
 
-# ── Views ────────────────────────────────────────────────────────────────────
+_alice_request = inline_serializer("AliceChatRequest", {
+    "message": s.CharField(help_text="Mensagem do usuário"),
+    "session_id": s.UUIDField(required=False, help_text="UUID da sessão existente (omitir para nova sessão)"),
+    "create_new_session": s.BooleanField(required=False, default=False),
+})
 
-class AliceChatView(APIView):
-    """Chat síncrono — retorna resposta completa."""
-    permission_classes = [IsAuthenticated]
+_session_summary = inline_serializer("SessionSummary", {
+    "session_id": s.UUIDField(),
+    "title": s.CharField(),
+    "updated_at": s.DateTimeField(),
+    "message_count": s.IntegerField(),
+})
 
-    def post(self, request):
-        message = request.data.get("message", "").strip()
-        session_id_str = request.data.get("session_id")
-        create_new = request.data.get("create_new_session", False)
+_session_detail = inline_serializer("SessionDetail", {
+    "session_id": s.UUIDField(),
+    "title": s.CharField(),
+    "messages": inline_serializer("SessionMessage", {
+        "role": s.ChoiceField(choices=["user", "assistant"]),
+        "content": s.CharField(),
+        "created_at": s.DateTimeField(),
+    }, many=True),
+})
 
-        if not message:
-            return Response(
-                {"success": False, "error": "Mensagem não pode ser vazia."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        session = _get_or_create_session(request.user, session_id_str, create_new)
-        history = _load_history(session)
-
-        start = time.time()
-        result = run_alice(message, history)
-        elapsed_ms = int((time.time() - start) * 1000)
-
-        ai_response = result["response"]
-        _persist_messages(session, message, ai_response)
-
-        return Response({
-            "success": result["success"],
-            "session_id": str(session.session_id),
-            "response": ai_response,
-            "sources": result.get("sources", []),
-            "execution_time_ms": elapsed_ms,
-            "error": None if result["success"] else ai_response,
-        })
+_detail_msg = inline_serializer("AgentDetailMsg", {"detail": s.CharField()})
 
 
+@extend_schema_view(
+    post=extend_schema(
+        tags=["Alice"],
+        summary="Chat com Alice — streaming SSE",
+        description=(
+            "Envia uma mensagem para a Alice e recebe a resposta como `text/event-stream`.\n\n"
+            "Cada evento SSE tem formato `data: <JSON>\\n\\n`. Tipos de evento:\n"
+            "- `{\"type\": \"session\", \"session_id\": \"<uuid>\"}` — enviado imediatamente\n"
+            "- `{\"type\": \"token\", \"content\": \"...\"}` — fragmento de texto\n"
+            "- `{\"type\": \"tool_start\", \"tool\": \"<nome>\"}` — ferramenta RAG acionada\n"
+            "- `{\"type\": \"done\", \"full_response\": \"...\"}` — fim do stream\n"
+            "- `{\"type\": \"error\", \"message\": \"...\"}` — erro"
+        ),
+        request=_alice_request,
+        responses={200: OpenApiResponse(description="text/event-stream SSE"), 400: _detail_msg},
+    )
+)
 class AliceStreamView(APIView):
-    """
-    Chat com streaming SSE.
-    Retorna text/event-stream com tokens em tempo real.
-    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -137,154 +135,85 @@ class AliceStreamView(APIView):
         return response
 
 
-class AliceQuickView(APIView):
-    """Pergunta rápida sem sessão."""
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        question = request.data.get("question", "").strip()
-        if not question:
-            return Response(
-                {"success": False, "error": "Pergunta não pode ser vazia."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        start = time.time()
-        result = run_alice(question, [])
-        elapsed_ms = int((time.time() - start) * 1000)
-
-        return Response({
-            "success": result["success"],
-            "response": result["response"],
-            "sources": result.get("sources", []),
-            "execution_time_ms": elapsed_ms,
-            "error": None if result["success"] else result["response"],
-        })
-
-
-class AliceSessionListView(APIView):
+@extend_schema_view(
+    get=extend_schema(
+        tags=["Alice"],
+        summary="Lista sessões do usuário (últimas 50)",
+        responses={200: inline_serializer("SessionSummaryList", {
+            "session_id": s.UUIDField(),
+            "title": s.CharField(),
+            "updated_at": s.DateTimeField(),
+            "message_count": s.IntegerField(),
+        }, many=True)},
+    ),
+    delete=extend_schema(
+        tags=["Alice"],
+        operation_id="sessions_delete_all",
+        summary="Apaga todo o histórico de conversas do usuário",
+        responses={204: None},
+    ),
+)
+class SessionListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        sessions = ConversationSession.objects.filter(user=request.user).order_by("-updated_at")
-        results = [
+        sessions = (
+            ConversationSession.objects
+            .filter(user=request.user, is_active=True)
+            .order_by("-updated_at")[:50]
+        )
+        data = [
             {
-                "id": s.id,
                 "session_id": str(s.session_id),
                 "title": s.title,
-                "is_active": s.is_active,
-                "message_count": s.message_count,
-                "created_at": s.created_at.isoformat(),
                 "updated_at": s.updated_at.isoformat(),
+                "message_count": s.message_count,
             }
             for s in sessions
         ]
-        return Response({"results": results})
+        return Response(data)
+
+    def delete(self, request):
+        ConversationSession.objects.filter(user=request.user).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class AliceSessionDetailView(APIView):
+@extend_schema_view(
+    get=extend_schema(
+        tags=["Alice"],
+        summary="Retorna mensagens de uma sessão",
+        responses={200: _session_detail, 404: _detail_msg},
+    ),
+    delete=extend_schema(
+        tags=["Alice"],
+        summary="Apaga uma sessão",
+        responses={204: None, 404: _detail_msg},
+    ),
+)
+class SessionDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, session_pk):
+    def get(self, request, session_id):
         try:
-            session = ConversationSession.objects.get(pk=session_pk, user=request.user)
+            session = ConversationSession.objects.get(
+                session_id=session_id, user=request.user
+            )
         except ConversationSession.DoesNotExist:
             return Response({"detail": "Sessão não encontrada."}, status=status.HTTP_404_NOT_FOUND)
 
-        messages = [
-            {"role": m.role, "content": m.content, "created_at": m.created_at.isoformat()}
-            for m in session.messages.all()
-        ]
+        messages = session.messages.order_by("created_at").values("role", "content", "created_at")
         return Response({
-            "id": session.id,
             "session_id": str(session.session_id),
             "title": session.title,
-            "is_active": session.is_active,
-            "message_count": session.message_count,
-            "created_at": session.created_at.isoformat(),
-            "updated_at": session.updated_at.isoformat(),
-            "messages": messages,
+            "messages": list(messages),
         })
 
-
-class AliceSessionSendView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, session_pk):
+    def delete(self, request, session_id):
         try:
-            session = ConversationSession.objects.get(pk=session_pk, user=request.user)
-        except ConversationSession.DoesNotExist:
-            return Response({"detail": "Sessão não encontrada."}, status=status.HTTP_404_NOT_FOUND)
-
-        message = request.data.get("message", "").strip()
-        if not message:
-            return Response(
-                {"success": False, "error": "Mensagem não pode ser vazia."},
-                status=status.HTTP_400_BAD_REQUEST,
+            session = ConversationSession.objects.get(
+                session_id=session_id, user=request.user
             )
-
-        history = _load_history(session)
-        start = time.time()
-        result = run_alice(message, history)
-        elapsed_ms = int((time.time() - start) * 1000)
-
-        _persist_messages(session, message, result["response"])
-
-        return Response({
-            "success": result["success"],
-            "session_id": str(session.session_id),
-            "response": result["response"],
-            "execution_time_ms": elapsed_ms,
-        })
-
-
-class AliceSessionClearView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, session_pk):
-        try:
-            session = ConversationSession.objects.get(pk=session_pk, user=request.user)
         except ConversationSession.DoesNotExist:
             return Response({"detail": "Sessão não encontrada."}, status=status.HTTP_404_NOT_FOUND)
-
-        session.messages.all().delete()
-        return Response({"success": True, "message": "Histórico da sessão removido."})
-
-
-class AliceStatsView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        sessions = ConversationSession.objects.filter(user=request.user)
-        total_messages = Message.objects.filter(session__user=request.user).count()
-
-        return Response({
-            "total_sessions": sessions.count(),
-            "active_sessions": sessions.filter(is_active=True).count(),
-            "total_messages": total_messages,
-            "total_queries": total_messages // 2,
-            "successful_queries": total_messages // 2,
-            "average_response_time": 0,
-            "most_active_user": request.user.email,
-            "popular_questions": [],
-        })
-
-
-class AliceSchemaTablesView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        return Response(["tutoriais", "manuais", "cursos", "setores", "tags", "usuarios"])
-
-
-class AliceSchemaView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        return Response([
-            {"type": "tutoriais", "description": "Guias passo a passo com mídia e anotações"},
-            {"type": "manuais", "description": "Documentos PDF organizados por setor"},
-            {"type": "cursos", "description": "Trilhas de aprendizado com provas e certificados"},
-            {"type": "setores", "description": "Unidades organizacionais para categorização"},
-            {"type": "tags", "description": "Marcadores temáticos com cor personalizada"},
-        ])
+        session.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

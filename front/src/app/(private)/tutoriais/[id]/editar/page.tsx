@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { formatDateTimeLocal } from '@/lib/utils/datetime';
 import { useParams, useRouter } from 'next/navigation';
 import {
   getTutorial,
@@ -28,6 +29,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { MultiSelect } from '@/components/ui/multi-select';
 import {
   ChevronLeft,
   Plus,
@@ -41,6 +44,9 @@ import {
   CheckCircle2,
   Circle,
   ChevronDown,
+  Globe,
+  Lock,
+  CalendarRange,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import ImageAnnotationEditor from '@/components/forms/ImageAnnotationEditor';
@@ -72,12 +78,17 @@ export default function EditarTutorialPage() {
   const [editingImageIndex, setEditingImageIndex] = useState<number | null>(null);
   const [editingImageUrl, setEditingImageUrl] = useState<string>('');
 
+  const [hasPeriodEnabled, setHasPeriodEnabled] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     sector: '',
     tags: [] as string[],
     is_active: true,
+    available_for_all_sectors: true,
+    allowed_sectors: [] as string[],
+    available_from: null as string | null,
+    available_until: null as string | null,
   });
 
   const [steps, setSteps] = useState<StepDraft[]>([]);
@@ -102,10 +113,15 @@ export default function EditarTutorialPage() {
       setFormData({
         title: tutorial.title,
         description: tutorial.description,
-        sector: tutorial.sector,
-        tags: tutorial.tags,
+        sector: String(tutorial.sector),
+        tags: tutorial.tags.map(String),
         is_active: tutorial.is_active,
+        available_for_all_sectors: tutorial.available_for_all_sectors ?? true,
+        allowed_sectors: (tutorial.allowed_sectors || []).map(String),
+        available_from: tutorial.available_from || null,
+        available_until: tutorial.available_until || null,
       });
+      setHasPeriodEnabled(!!(tutorial.available_from || tutorial.available_until));
 
       const drafts: StepDraft[] = tutorial.steps.map((s: TutorialStep) => {
         const imgMedia = s.media.find((m) => m.media_type === 'image');
@@ -193,6 +209,11 @@ export default function EditarTutorialPage() {
       return;
     }
 
+    if (steps.some(step => (step.title || step.content || step.image || step.youtube_url) && (!step.title.trim() || !step.content.trim()))) {
+      toast({title:'Complete o título e a descrição de cada passo preenchido.', variant:'destructive'});
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await updateTutorial(id, formData);
@@ -226,6 +247,7 @@ export default function EditarTutorialPage() {
         }
 
         if (step.image && stepId) {
+          if (step.existingMediaId && !step.removeExistingMedia) await deleteTutorialMedia(step.existingMediaId);
           await createTutorialMedia({ step: stepId, media_type: 'image', file: step.image, order: 1 });
         } else if (step.youtube_url && stepId && step.youtube_url !== step.existingVideoUrl) {
           if (step.existingMediaId && !step.removeExistingMedia) {
@@ -654,6 +676,102 @@ export default function EditarTutorialPage() {
                 </div>
                 Adicionar Passo
               </button>
+            </div>
+          </div>
+
+          {/* Seção 03 — Disponibilidade */}
+          <div className="rounded-2xl border bg-card p-6 space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-primary/10 text-primary text-sm font-bold grid place-items-center shrink-0">
+                03
+              </div>
+              <div>
+                <h2 className="text-base font-semibold tracking-tight">Disponibilidade</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Controle quem pode ver este tutorial e quando</p>
+              </div>
+            </div>
+
+            <div className="h-px bg-border" />
+
+            {/* Setores */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-2">
+                  <Globe className="h-4 w-4 text-muted-foreground" />
+                  <div className="space-y-0.5">
+                    <Label>Todos os setores</Label>
+                    <p className="text-xs text-muted-foreground">
+                      {formData.available_for_all_sectors ? 'Visível para todos os usuários' : 'Apenas setores selecionados'}
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  checked={formData.available_for_all_sectors}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, available_for_all_sectors: checked, allowed_sectors: [] })
+                  }
+                />
+              </div>
+              {!formData.available_for_all_sectors && (
+                <div className="space-y-2 pl-1">
+                  <div className="flex items-center gap-1.5">
+                    <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                    <Label className="text-xs text-muted-foreground">Setores com acesso</Label>
+                  </div>
+                  <MultiSelect
+                    options={sectors.map((s) => ({ id: s.id.toString(), name: s.name }))}
+                    selected={formData.allowed_sectors}
+                    onChange={(vals) => setFormData({ ...formData, allowed_sectors: vals })}
+                    placeholder="Selecione os setores..."
+                    emptyText="Nenhum setor encontrado"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Período */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-2">
+                  <CalendarRange className="h-4 w-4 text-muted-foreground" />
+                  <div className="space-y-0.5">
+                    <Label>Definir período</Label>
+                    <p className="text-xs text-muted-foreground">
+                      {hasPeriodEnabled ? 'Período definido' : 'Sem limite de tempo'}
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  checked={hasPeriodEnabled}
+                  onCheckedChange={(checked) => {
+                    setHasPeriodEnabled(checked);
+                    if (!checked) setFormData({ ...formData, available_from: null, available_until: null });
+                  }}
+                />
+              </div>
+              {hasPeriodEnabled && (
+                <div className="grid grid-cols-2 gap-3 pl-1">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Início</Label>
+                    <Input
+                      type="datetime-local"
+                      value={formatDateTimeLocal(formData.available_from)}
+                      onChange={(e) => setFormData({ ...formData, available_from: e.target.value || null })}
+                      className="h-10 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Término</Label>
+                    <Input
+                      type="datetime-local"
+                      value={formatDateTimeLocal(formData.available_until)}
+                      onChange={(e) => setFormData({ ...formData, available_until: e.target.value || null })}
+                      min={formatDateTimeLocal(formData.available_from) || undefined}
+                      className="h-10 text-sm"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

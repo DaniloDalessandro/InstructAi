@@ -1,14 +1,18 @@
 "use client"
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { loginUser, logout } from '@/lib/api/auth'
+import { getProfile } from '@/lib/api/account'
+import { ChangePasswordForm } from '@/components/forms/ChangePasswordForm'
 
 interface User {
   id: string
   name: string
   email: string
+  must_change_password?: boolean
   role?: string
+  is_staff?: boolean
   is_superuser?: boolean
   avatar?: string
   phone?: string
@@ -45,24 +49,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
+  const sessionVersion = useRef(0)
 
   useEffect(() => {
-    // Lê de cookie (novo) com fallback para localStorage (sessões antigas)
-    const token = getCookie('access') || localStorage.getItem('access_token') || localStorage.getItem('access')
-    const userRaw = getCookie('user') || localStorage.getItem('user')
-
-    if (token && userRaw) {
-      setAccessToken(token)
-      try {
-        setUser(JSON.parse(userRaw))
-      } catch {
-        // dado corrompido — ignora
-      }
-    }
-    setIsLoading(false)
+    let active = true;
+    const version = sessionVersion.current;
+    const token = getCookie('access') || localStorage.getItem('access_token') || localStorage.getItem('access');
+    if (!getCookie('access') && token) setCookie('access',token,3600);
+    if (!token && !getCookie('refresh')) {setIsLoading(false);return;}
+    getProfile().then(profile => {
+      if (!active || version !== sessionVersion.current) return;
+      const restored = {...profile, id:String(profile.id), avatar:profile.avatar_url || undefined};
+      setAccessToken(getCookie('access'));
+      setUser(restored);
+      setCookie('user',JSON.stringify(restored),60*60*24*7);
+    }).catch(() => {
+      if (active && version === sessionVersion.current) {setUser(null);setAccessToken(null);}
+    }).finally(() => {if (active) setIsLoading(false);});
+    return () => {active = false;};
   }, [])
 
   const login = async (email: string, password: string) => {
+    sessionVersion.current++;
     const response = await loginUser({ email, password })
 
     if (response.access && response.user) {
@@ -70,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(response.user)
 
       setCookie('access', response.access, 60 * 60)             // 1 hora
-      setCookie('user', JSON.stringify(response.user), 60 * 60)
+      setCookie('user', JSON.stringify(response.user), 60 * 60 * 24 * 7)
 
       if (response.refresh) {
         setCookie('refresh', response.refresh, 60 * 60 * 24 * 7) // 7 dias
@@ -84,12 +92,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(prev => {
       if (!prev) return prev
       const updated = { ...prev, ...data }
-      setCookie('user', JSON.stringify(updated), 60 * 60)
+      setCookie('user', JSON.stringify(updated), 60 * 60 * 24 * 7)
       return updated
     })
   }
 
   const handleLogout = async () => {
+    sessionVersion.current++;
     try {
       await logout()
     } catch {
@@ -119,6 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
+      <ChangePasswordForm isOpen={!!user?.must_change_password} mandatory onClose={() => updateUser({must_change_password:false})}/>
     </AuthContext.Provider>
   )
 }

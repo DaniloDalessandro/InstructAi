@@ -1,9 +1,15 @@
-from rest_framework import viewsets, filters, status
+from rest_framework import viewsets, filters, status, serializers as s
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Count
+from django_filters import rest_framework as django_filters
+from django.db.models import Count, Q
+from django.utils import timezone
+from drf_spectacular.utils import (
+    extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse, inline_serializer,
+)
+from drf_spectacular.types import OpenApiTypes
 
 from .models import Tutorial, TutorialStep, TutorialMedia
 from .serializers import (
@@ -16,35 +22,96 @@ from .serializers import (
 )
 from access.permissions import ContentPermission, CanManageAccess, ChildObjectPermission
 
+_shared_admins_response = inline_serializer("SharedAdmins", {
+    "shared_admins": inline_serializer("AdminInfo", {
+        "id": s.IntegerField(),
+        "email": s.EmailField(),
+        "name": s.CharField(),
+    }, many=True),
+})
 
+
+class NumberInFilter(django_filters.BaseInFilter, django_filters.NumberFilter):
+    pass
+
+
+class TutorialFilter(django_filters.FilterSet):
+    sector = NumberInFilter(field_name='sector_id', lookup_expr='in')
+
+    class Meta:
+        model = Tutorial
+        fields = ['sector', 'is_active']
+
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Tutoriais"],
+        summary="Lista tutoriais",
+        parameters=[
+            OpenApiParameter("tags", OpenApiTypes.INT, many=True, description="Filtra por tag (pode repetir)"),
+            OpenApiParameter("sector", OpenApiTypes.INT, description="Filtra por setor"),
+            OpenApiParameter("is_active", OpenApiTypes.BOOL, description="Filtra por status"),
+            OpenApiParameter("search", OpenApiTypes.STR, description="Busca por título ou descrição"),
+        ],
+    ),
+    retrieve=extend_schema(tags=["Tutoriais"], summary="Detalha tutorial"),
+    create=extend_schema(tags=["Tutoriais"], summary="Cria tutorial"),
+    update=extend_schema(tags=["Tutoriais"], summary="Atualiza tutorial"),
+    partial_update=extend_schema(tags=["Tutoriais"], summary="Atualiza tutorial parcialmente"),
+    destroy=extend_schema(tags=["Tutoriais"], summary="Remove tutorial"),
+)
 class TutorialViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet para o modelo Tutorial.
-
-    list: Retorna lista de tutoriais (apenas ativos para não-owners)
-    retrieve: Obtém um tutorial específico
-    create: Cria novo tutorial
-    update: Atualiza tutorial (owner ou staff)
-    partial_update: Atualiza parcialmente (owner ou staff)
-    destroy: Remove tutorial (owner ou staff)
-    """
     permission_classes = [IsAuthenticated, ContentPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['sector', 'is_active']
+    filterset_class = TutorialFilter
     search_fields = ['title', 'description']
     ordering_fields = ['created_at', 'updated_at', 'title']
     ordering = ['-created_at']
 
     def get_queryset(self):
-        """Retorna tutoriais de acordo com as permissões do usuário"""
-        queryset = Tutorial.objects.select_related('sector', 'created_by').prefetch_related('tags')
-        queryset = queryset.annotate(step_count=Count('steps', distinct=True))
+        if getattr(self, 'swagger_fake_view', False):
+            return Tutorial.objects.none()
+        user = self.request.user
+        now = timezone.now()
 
-        # Authenticated users that are not staff see only active tutorials
-        if not self.request.user.is_staff:
-            queryset = queryset.filter(is_active=True)
+        queryset = (
+            Tutorial.objects
+            .select_related('sector', 'created_by')
+            .prefetch_related('tags', 'allowed_sectors')
+            .annotate(step_count=Count('steps', distinct=True))
+        )
 
-        # Filtro OR de tags: retorna tutoriais que possuam qualquer uma das tags selecionadas
+        # Admins veem tudo (inclusive inativos se solicitado)
+        if user.is_staff or user.is_superuser:
+            tag_ids = self.request.query_params.getlist('tags')
+            tag_ids = [t for t in tag_ids if t]
+            if tag_ids:
+                queryset = queryset.filter(tags__id__in=tag_ids).distinct()
+            return queryset
+
+        # Usuários comuns só veem ativos
+        queryset = queryset.filter(is_active=True)
+
+        # Filtro de setor
+        user_sector_id = getattr(user, 'sector_id', None)
+        if user_sector_id:
+            sector_q = Q(available_for_all_sectors=True) | Q(allowed_sectors=user_sector_id)
+        else:
+            sector_q = Q(available_for_all_sectors=True)
+
+        # Filtro de período
+        time_q = (
+            Q(available_from__isnull=True) | Q(available_from__lte=now)
+        ) & (
+            Q(available_until__isnull=True) | Q(available_until__gte=now)
+        )
+
+        # Owners e shared_admins bypassam filtros de setor/data
+        owned_q = Q(created_by=user) | Q(shared_admins=user)
+
+        queryset = queryset.filter(owned_q | (sector_q & time_q)).distinct()
+
+        # Filtro OR de tags
         tag_ids = self.request.query_params.getlist('tags')
         tag_ids = [t for t in tag_ids if t]
         if tag_ids:
@@ -53,7 +120,6 @@ class TutorialViewSet(viewsets.ModelViewSet):
         return queryset
 
     def get_serializer_class(self):
-        """Retorna o serializer adequado para cada ação"""
         if self.action == 'list':
             return TutorialListSerializer
         elif self.action in ['create', 'update', 'partial_update']:
@@ -75,12 +141,18 @@ class TutorialViewSet(viewsets.ModelViewSet):
         log_action(self.request.user, 'delete', 'tutorial', instance, request=self.request)
         instance.delete()
 
+    @extend_schema(
+        tags=["Tutoriais"],
+        summary="Gerencia administradores delegados do tutorial",
+        description="GET retorna lista; POST aceita `{\"add\": [...], \"remove\": [...]}` com e-mails.",
+        request=inline_serializer("ShareRequest", {
+            "add": s.ListField(child=s.EmailField(), required=False),
+            "remove": s.ListField(child=s.EmailField(), required=False),
+        }),
+        responses={200: _shared_admins_response},
+    )
     @action(detail=True, methods=['get', 'post'], permission_classes=[IsAuthenticated, CanManageAccess])
     def share(self, request, pk=None):
-        """
-        GET  — lista os administradores delegados.
-        POST — { "add": ["email@..."], "remove": ["email@..."] }
-        """
         from django.contrib.auth import get_user_model
         from access.models import log_action
 
@@ -120,11 +192,19 @@ class TutorialViewSet(viewsets.ModelViewSet):
         return Response(data)
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Tutoriais"],
+        summary="Lista passos de tutorial",
+        parameters=[OpenApiParameter("tutorial", OpenApiTypes.UUID, description="Filtra por tutorial")],
+    ),
+    retrieve=extend_schema(tags=["Tutoriais"], summary="Detalha passo"),
+    create=extend_schema(tags=["Tutoriais"], summary="Cria passo de tutorial"),
+    update=extend_schema(tags=["Tutoriais"], summary="Atualiza passo"),
+    partial_update=extend_schema(tags=["Tutoriais"], summary="Atualiza passo parcialmente"),
+    destroy=extend_schema(tags=["Tutoriais"], summary="Remove passo"),
+)
 class TutorialStepViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet para o modelo TutorialStep.
-    Permite criação, leitura, atualização e remoção de passos de tutoriais.
-    """
     permission_classes = [IsAuthenticated, ChildObjectPermission]
     queryset = TutorialStep.objects.select_related('tutorial').prefetch_related('media').all()
     filter_backends = [filters.OrderingFilter]
@@ -132,25 +212,30 @@ class TutorialStepViewSet(viewsets.ModelViewSet):
     ordering = ['order']
 
     def get_serializer_class(self):
-        """Retorna o serializer adequado para cada ação"""
         if self.action in ['create', 'update', 'partial_update']:
             return TutorialStepCreateUpdateSerializer
         return TutorialStepSerializer
 
     def get_queryset(self):
-        """Filtra passos por tutorial quando o parâmetro é fornecido"""
         queryset = super().get_queryset()
         tutorial_id = self.request.query_params.get('tutorial')
         if tutorial_id:
             queryset = queryset.filter(tutorial_id=tutorial_id)
         return queryset
 
+    @extend_schema(
+        tags=["Tutoriais"],
+        summary="Reordena passos de um tutorial",
+        request=inline_serializer("ReorderRequest", {
+            "steps": inline_serializer("StepOrder", {
+                "id": s.UUIDField(),
+                "order": s.IntegerField(),
+            }, many=True),
+        }),
+        responses={200: TutorialStepSerializer(many=True)},
+    )
     @action(detail=False, methods=['post'], url_path='reorder')
     def reorder(self, request):
-        """
-        Reordena passos de um tutorial.
-        Entrada esperada: { "steps": [{"id": "uuid", "order": 1}, ...] }
-        """
         from django.db import transaction
 
         steps_data = request.data.get('steps', [])
@@ -189,11 +274,19 @@ class TutorialStepViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Tutoriais"],
+        summary="Lista mídias de passos",
+        parameters=[OpenApiParameter("step", OpenApiTypes.UUID, description="Filtra por passo")],
+    ),
+    retrieve=extend_schema(tags=["Tutoriais"], summary="Detalha mídia"),
+    create=extend_schema(tags=["Tutoriais"], summary="Faz upload de mídia"),
+    update=extend_schema(tags=["Tutoriais"], summary="Atualiza mídia"),
+    partial_update=extend_schema(tags=["Tutoriais"], summary="Atualiza mídia parcialmente"),
+    destroy=extend_schema(tags=["Tutoriais"], summary="Remove mídia"),
+)
 class TutorialMediaViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet para o modelo TutorialMedia.
-    Permite criação, leitura, atualização e remoção de mídias dos passos.
-    """
     permission_classes = [IsAuthenticated, ChildObjectPermission]
     queryset = TutorialMedia.objects.select_related('step__tutorial').all()
     serializer_class = TutorialMediaSerializer
@@ -202,7 +295,6 @@ class TutorialMediaViewSet(viewsets.ModelViewSet):
     ordering = ['order']
 
     def get_queryset(self):
-        """Filtra mídias por passo quando o parâmetro é fornecido"""
         queryset = super().get_queryset()
         step_id = self.request.query_params.get('step')
         if step_id:

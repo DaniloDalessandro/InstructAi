@@ -8,6 +8,31 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 
+class IssuingCompany(models.Model):
+    """Empresa única responsável pela emissão dos certificados."""
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    name = models.CharField(max_length=200, verbose_name='Nome / razão social')
+    cnpj = models.CharField(max_length=18, blank=True, default='', verbose_name='CNPJ')
+    signatory_name = models.CharField(max_length=150, blank=True, default='', verbose_name='Responsável pela assinatura')
+    signatory_role = models.CharField(max_length=100, blank=True, default='', verbose_name='Cargo do responsável')
+    certificate_text = models.CharField(max_length=500, blank=True, default='', verbose_name='Texto adicional do certificado')
+    criado_em = models.DateTimeField(auto_now_add=True)
+    criado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    atualizado_em = models.DateTimeField(auto_now=True)
+    atualizado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+
+    class Meta:
+        verbose_name = 'Empresa emissora'
+        verbose_name_plural = 'Empresa emissora'
+        constraints = [models.CheckConstraint(condition=models.Q(id=1), name='single_issuing_company')]
+
+    def __str__(self):
+        return self.name
+
+    def certificate_snapshot(self):
+        return {field: getattr(self, field) for field in ('name', 'cnpj', 'signatory_name', 'signatory_role', 'certificate_text')}
+
+
 class Course(models.Model):
     """Modelo de Curso"""
     name = models.CharField(max_length=200, verbose_name='Nome do Curso')
@@ -54,6 +79,11 @@ class Course(models.Model):
     notification_sent_at = models.DateTimeField(
         null=True, blank=True,
         verbose_name='Notificação enviada em',
+    )
+    reminders_enabled = models.BooleanField(
+        default=True,
+        verbose_name='Lembretes automáticos de prazo',
+        help_text='Envia e-mails de lembrete 72h, 48h e 24h antes do encerramento.',
     )
 
     # ── Controle de acesso ──────────────────────────────────
@@ -182,6 +212,58 @@ class CourseProgress(models.Model):
         return True
 
 
+class CourseReminderLog(models.Model):
+    """Registro de lembretes de prazo enviados por e-mail."""
+
+    REMINDER_CHOICES = [
+        ('72h', '72 horas antes'),
+        ('48h', '48 horas antes'),
+        ('24h', '24 horas antes'),
+    ]
+    STATUS_CHOICES = [
+        ('sent', 'Enviado'),
+        ('failed', 'Falhou'),
+    ]
+
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.CASCADE,
+        related_name='reminder_logs',
+        verbose_name='Curso',
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='course_reminder_logs',
+        verbose_name='Usuário',
+    )
+    reminder_type = models.CharField(
+        max_length=4,
+        choices=REMINDER_CHOICES,
+        verbose_name='Tipo de Lembrete',
+    )
+    sent_at = models.DateTimeField(auto_now_add=True, verbose_name='Enviado em')
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default='sent',
+        verbose_name='Status',
+    )
+    error_message = models.TextField(
+        blank=True, null=True,
+        verbose_name='Mensagem de Erro',
+    )
+
+    class Meta:
+        verbose_name = 'Log de Lembrete'
+        verbose_name_plural = 'Logs de Lembretes'
+        unique_together = ['course', 'user', 'reminder_type']
+        ordering = ['-sent_at']
+
+    def __str__(self):
+        return f'{self.course.name} — {self.user.email} — {self.reminder_type}'
+
+
 class LessonProgress(models.Model):
     """Modelo de Progresso da Aula"""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='lesson_progress', verbose_name='Usuário')
@@ -209,6 +291,7 @@ class Certificate(models.Model):
     validation_code = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, verbose_name='Código de Validação')
     pdf_file = models.FileField(upload_to='certificates/', null=True, blank=True, verbose_name='Arquivo PDF')
     issued_at = models.DateTimeField(auto_now_add=True, verbose_name='Emitido em')
+    issuer_snapshot = models.JSONField(default=dict, blank=True, verbose_name='Empresa na emissão')
 
     # Auditoria
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Criado em')
@@ -221,3 +304,12 @@ class Certificate(models.Model):
 
     def __str__(self):
         return f"Certificado - {self.user.email} - {self.course.name}"
+
+    def save(self, *args, **kwargs):
+        if not self.issuer_snapshot:
+            company = IssuingCompany.objects.filter(pk=1).first()
+            if company:
+                self.issuer_snapshot = company.certificate_snapshot()
+                if kwargs.get('update_fields') is not None:
+                    kwargs['update_fields'] = set(kwargs['update_fields']) | {'issuer_snapshot'}
+        super().save(*args, **kwargs)

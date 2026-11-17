@@ -1,5 +1,6 @@
 services:
   db:
+    container_name: instructai-db
     image: pgvector/pgvector:pg16
     restart: unless-stopped
     env_file: .env
@@ -14,10 +15,11 @@ services:
       retries: 5
 
   redis:
+    container_name: instructai-redis
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -25,6 +27,7 @@ services:
       retries: 5
 
   backend:
+    container_name: instructai-backend
     build:
       context: ./back
       dockerfile: docker/Dockerfile
@@ -34,7 +37,7 @@ services:
       - ./back:/app
       - media_data:/app/media
     ports:
-      - "8001:8000"
+      - "8002:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -42,6 +45,7 @@ services:
         condition: service_healthy
 
   celery_worker:
+    container_name: instructai-celery-worker
     build:
       context: ./back
       dockerfile: docker/Dockerfile
@@ -57,7 +61,25 @@ services:
       redis:
         condition: service_healthy
 
+  celery_beat:
+    container_name: instructai-celery-beat
+    build:
+      context: ./back
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    command: sh -c "celery -A core beat -l info"
+    volumes:
+      - ./back:/app
+      - media_data:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   frontend:
+    container_name: instructai-frontend
     build:
       context: ./front
       dockerfile: docker/Dockerfile

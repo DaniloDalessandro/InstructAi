@@ -34,3 +34,7 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Arquivos locais de execução e infraestrutura
+celerybeat-schedule*
+infra.md

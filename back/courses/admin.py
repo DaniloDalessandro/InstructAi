@@ -1,6 +1,8 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Course, Lesson, Question, CourseProgress, LessonProgress, Certificate
+from django.db.models import Count, Q
+from django.utils import timezone
+from .models import Course, Lesson, Question, CourseProgress, LessonProgress, Certificate, CourseReminderLog
 
 
 class LessonInline(admin.TabularInline):
@@ -13,7 +15,7 @@ class LessonInline(admin.TabularInline):
 class QuestionInline(admin.TabularInline):
     model = Question
     extra = 1
-    fields = ['text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_option', 'order']
+    fields = ['text', 'options', 'correct_option', 'order']
     ordering = ['order']
 
 
@@ -66,6 +68,13 @@ class CourseAdmin(admin.ModelAdmin):
         }),
         ('Configurações do Curso', {
             'fields': ('workload_hours', 'has_final_exam', 'passing_score')
+        }),
+        ('Disponibilidade e Lembretes', {
+            'fields': (
+                'available_for_all_sectors', 'allowed_sectors',
+                'available_from', 'available_until',
+                'reminders_enabled',
+            ),
         }),
         ('Auditoria', {
             'fields': ('created_at', 'updated_at', 'created_by', 'updated_by'),
@@ -202,3 +211,137 @@ class CertificateAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+
+# ── Ações do painel de lembretes ──────────────────────────────────────────────
+
+@admin.action(description='Reenviar lembretes selecionados')
+def reenviar_lembretes(modeladmin, request, queryset):
+    from courses.tasks import resend_reminder
+    groups = {}
+    for log in queryset.select_related('course', 'user'):
+        key = (log.course_id, log.reminder_type)
+        groups.setdefault(key, []).append(log.user_id)
+
+    for (course_id, reminder_type), user_ids in groups.items():
+        resend_reminder.delay(course_id, reminder_type, user_ids)
+
+    modeladmin.message_user(
+        request,
+        f'{queryset.count()} lembrete(s) enfileirado(s) para reenvio.',
+    )
+
+
+@admin.register(CourseReminderLog)
+class CourseReminderLogAdmin(admin.ModelAdmin):
+    list_display  = [
+        'sent_at_display', 'course_link', 'user_display',
+        'reminder_badge', 'status_badge', 'error_preview',
+    ]
+    list_filter   = ['reminder_type', 'status', 'course', 'sent_at']
+    search_fields = ['user__email', 'user__name', 'course__name']
+    readonly_fields = [
+        'course', 'user', 'reminder_type', 'sent_at', 'status', 'error_message',
+    ]
+    ordering  = ['-sent_at']
+    actions   = [reenviar_lembretes]
+    list_per_page = 50
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    # ── Colunas customizadas ──────────────────────────────────────────────────
+
+    def sent_at_display(self, obj):
+        local = timezone.localtime(obj.sent_at)
+        return format_html(
+            '<span style="font-size:12px">{}</span>',
+            local.strftime('%d/%m/%Y %H:%M'),
+        )
+    sent_at_display.short_description = 'Enviado em'
+    sent_at_display.admin_order_field = 'sent_at'
+
+    def course_link(self, obj):
+        return format_html(
+            '<span style="font-size:12px;font-weight:500">{}</span>',
+            obj.course.name,
+        )
+    course_link.short_description = 'Curso'
+    course_link.admin_order_field = 'course__name'
+
+    def user_display(self, obj):
+        return format_html(
+            '<span style="font-size:12px;font-weight:500">{}</span>'
+            '<br><span style="font-size:11px;color:#8a8f98">{}</span>',
+            obj.user.name or '—',
+            obj.user.email,
+        )
+    user_display.short_description = 'Usuário'
+    user_display.admin_order_field = 'user__email'
+
+    def reminder_badge(self, obj):
+        colors = {'72h': '#5e6ad2', '48h': '#f59e0b', '24h': '#e5484d'}
+        color = colors.get(obj.reminder_type, '#8a8f98')
+        return format_html(
+            '<span style="background:{};color:#fff;padding:2px 9px;border-radius:4px;'
+            'font-size:11px;font-weight:700">{}</span>',
+            color, obj.get_reminder_type_display(),
+        )
+    reminder_badge.short_description = 'Lembrete'
+    reminder_badge.admin_order_field = 'reminder_type'
+
+    def status_badge(self, obj):
+        if obj.status == 'sent':
+            return format_html(
+                '<span style="background:#10b981;color:#fff;padding:2px 9px;'
+                'border-radius:4px;font-size:11px;font-weight:600">Enviado</span>'
+            )
+        return format_html(
+            '<span style="background:#e5484d;color:#fff;padding:2px 9px;'
+            'border-radius:4px;font-size:11px;font-weight:600">Falhou</span>'
+        )
+    status_badge.short_description = 'Status'
+    status_badge.admin_order_field = 'status'
+
+    def error_preview(self, obj):
+        if not obj.error_message:
+            return format_html('<span style="color:#8a8f98;font-size:11px">—</span>')
+        preview = obj.error_message[:80] + ('…' if len(obj.error_message) > 80 else '')
+        return format_html('<span style="color:#e5484d;font-size:11px">{}</span>', preview)
+    error_preview.short_description = 'Erro'
+
+    # ── Painel de estatísticas no topo da listagem ───────────────────���────────
+
+    def changelist_view(self, request, extra_context=None):
+        from django.db.models import Count
+
+        stats = CourseReminderLog.objects.aggregate(
+            total=Count('id'),
+            sent=Count('id', filter=Q(status='sent')),
+            failed=Count('id', filter=Q(status='failed')),
+            last_72h=Count('id', filter=Q(reminder_type='72h', status='sent')),
+            last_48h=Count('id', filter=Q(reminder_type='48h', status='sent')),
+            last_24h=Count('id', filter=Q(reminder_type='24h', status='sent')),
+        )
+
+        # Última execução da task
+        from django_redis import get_redis_connection
+        last_run = None
+        try:
+            rc = get_redis_connection('default')
+            val = rc.get('course_reminders:last_run')
+            if val:
+                last_run = val.decode()
+        except Exception:
+            pass
+
+        extra_context = extra_context or {}
+        extra_context['reminder_stats'] = stats
+        extra_context['reminder_last_run'] = last_run
+        return super().changelist_view(request, extra_context=extra_context)
+
+    class Media:
+        css = {'all': []}  # Placeholder para override de template se necessário

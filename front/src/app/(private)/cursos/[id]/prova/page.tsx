@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getCourse, getExamQuestions, submitExam } from '@/lib/api/courses';
 import type { Course, QuestionPublic, ExamResult, QuestionResult } from '@/types/course.types';
@@ -23,6 +23,8 @@ export default function ExamPage() {
   const router = useRouter();
   const courseId = params.id as string;
 
+  const autoSubmitted = useRef(false);
+  const submitting = useRef(false);
   const [course, setCourse] = useState<Course | null>(null);
   const [questions, setQuestions] = useState<QuestionPublic[]>([]);
   const [answers, setAnswers] = useState<Record<string, 'A' | 'B' | 'C' | 'D'>>({});
@@ -70,12 +72,16 @@ export default function ExamPage() {
   useEffect(() => {
     if (!examStarted || examFinished || timeRemaining <= 0) return;
     const interval = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev <= 1) { handleAutoSubmit(); return 0; }
-        return prev - 1;
-      });
+      setTimeRemaining(previous => Math.max(0, previous - 1));
     }, 1000);
     return () => clearInterval(interval);
+  }, [examStarted, examFinished, timeRemaining]);
+
+  useEffect(() => {
+    if (examStarted && !examFinished && timeRemaining === 0 && !autoSubmitted.current) {
+      autoSubmitted.current = true;
+      void handleAutoSubmit();
+    }
   }, [examStarted, examFinished, timeRemaining]);
 
   const handleAnswerChange = (questionId: string, option: 'A' | 'B' | 'C' | 'D') => {
@@ -88,6 +94,7 @@ export default function ExamPage() {
   };
 
   const handleSubmit = async (autoSubmit = false) => {
+    if (submitting.current) return;
     if (!autoSubmit) {
       const unanswered = questions.filter((q) => !answers[q.id]);
       if (unanswered.length > 0) {
@@ -99,14 +106,20 @@ export default function ExamPage() {
         return;
       }
     }
+    submitting.current = true;
     setIsSubmitting(true);
     try {
-      const result = await submitExam(courseId, { answers });
+      const optionIndex: Record<'A' | 'B' | 'C' | 'D', number> = { A: 0, B: 1, C: 2, D: 3 };
+      const numericAnswers = Object.fromEntries(
+        Object.entries(answers).map(([questionId, answer]) => [questionId, optionIndex[answer]])
+      );
+      const result = await submitExam(courseId, { answers: numericAnswers });
       setExamResult(result);
       setExamFinished(true);
     } catch {
       toast({ title: 'Erro ao enviar prova', description: 'Tente novamente.', variant: 'destructive' });
     } finally {
+      submitting.current = false;
       setIsSubmitting(false);
     }
   };
@@ -300,13 +313,13 @@ export default function ExamPage() {
                                 'text-[11px] font-semibold px-1.5 py-0.5 rounded',
                                 correct ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400 line-through',
                               )}>
-                                {r.your_answer}
+                                {r.your_answer == null ? 'Sem resposta' : String.fromCharCode(65 + r.your_answer)}
                               </span>
                               {!correct && (
                                 <>
                                   <span className="text-[10px] text-muted-foreground">→</span>
                                   <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded bg-emerald-500/10">
-                                    {r.correct_answer}
+                                    {String.fromCharCode(65 + r.correct_answer)}
                                   </span>
                                 </>
                               )}
@@ -560,7 +573,8 @@ export default function ExamPage() {
                     onValueChange={(v) => handleAnswerChange(currentQuestion.id, v as 'A' | 'B' | 'C' | 'D')}
                   >
                     <div className="space-y-3">
-                      {(['A', 'B', 'C', 'D'] as const).map((option) => {
+                      {currentQuestion.options.map((optionText, optionIndex) => {
+                        const option = (['A', 'B', 'C', 'D'] as const)[optionIndex];
                         const selected = answers[currentQuestion.id] === option;
                         return (
                           <div
@@ -584,7 +598,7 @@ export default function ExamPage() {
                               htmlFor={`${currentQuestion.id}-${option}`}
                               className="text-sm leading-relaxed cursor-pointer flex-1"
                             >
-                              {currentQuestion[`option_${option.toLowerCase()}` as keyof QuestionPublic]}
+                              {optionText}
                             </Label>
                           </div>
                         );

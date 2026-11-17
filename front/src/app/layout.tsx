@@ -17,10 +17,11 @@ export const metadata: Metadata = {
   description: "Sistema de Gestão de Conhecimento - InstructAI",
   icons: {
     icon: [
-      { url: '/favicon.ico' },
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', sizes: '32x32' },
     ],
-    shortcut: '/favicon.ico',
-    apple: '/favicon.ico',
+    shortcut: '/favicon.svg',
+    apple: '/favicon.svg',
   },
   applicationName: 'InstructAI',
   keywords: ['instructai', 'emap', 'gestão', 'contratos'],
@@ -40,9 +41,9 @@ export default function RootLayout({
   return (
     <html lang="pt-br" suppressHydrationWarning>
       <head>
-        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-        <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-        <link rel="manifest" href="/manifest.json" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" sizes="any" />
+        <link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="32x32" />
+        <link rel="manifest" href="/manifest.webmanifest" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="InstructAI" />

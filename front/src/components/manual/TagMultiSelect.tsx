@@ -35,18 +35,18 @@ export function TagMultiSelect({
 }: TagMultiSelectProps) {
   const [open, setOpen] = useState(false);
 
-  const selectedTags = tags.filter((tag) => selectedTagIds.includes(tag.id));
+  const selectedTags = tags.filter((tag) => selectedTagIds.map(String).includes(String(tag.id)));
 
   const toggleTag = (tagId: string) => {
-    const newSelection = selectedTagIds.includes(tagId)
-      ? selectedTagIds.filter((id) => id !== tagId)
-      : [...selectedTagIds, tagId];
+    const newSelection = selectedTagIds.map(String).includes(String(tagId))
+      ? selectedTagIds.map(String).filter((id) => id !== String(tagId))
+      : [...selectedTagIds.map(String), String(tagId)];
     onSelectionChange(newSelection);
   };
 
   const removeTag = (tagId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    onSelectionChange(selectedTagIds.filter((id) => id !== tagId));
+    onSelectionChange(selectedTagIds.map(String).filter((id) => id !== String(tagId)));
   };
 
   const clearAll = (e: React.MouseEvent) => {
@@ -113,7 +113,7 @@ export function TagMultiSelect({
             <CommandEmpty>Nenhuma tag encontrada.</CommandEmpty>
             <CommandGroup>
               {tags.map((tag) => {
-                const isSelected = selectedTagIds.includes(tag.id);
+                const isSelected = selectedTagIds.map(String).includes(String(tag.id));
                 return (
                   <CommandItem
                     key={tag.id}

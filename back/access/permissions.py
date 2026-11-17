@@ -17,6 +17,8 @@ from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 def _get_owner(obj):
     """Retorna o owner do objeto (suporta FK `owner` e FK `created_by`)."""
+    if hasattr(obj, 'course'):
+        return _get_owner(obj.course)
     # Campo owner explícito (Manual, Course)
     if hasattr(obj, "owner") and obj.owner_id is not None:
         return obj.owner
@@ -33,6 +35,8 @@ def _is_owner(user, obj):
 
 
 def _is_delegated_admin(user, obj):
+    if hasattr(obj, 'course'):
+        return _is_delegated_admin(user, obj.course)
     if hasattr(obj, "shared_admins"):
         return obj.shared_admins.filter(pk=user.pk).exists()
     return False
@@ -191,3 +195,9 @@ class ChildObjectPermission(BasePermission):
         if request.method == "DELETE":
             return _is_owner(user, parent)
         return _is_owner(user, parent) or _is_delegated_admin(user, parent)
+
+
+class AdminWritePermission(BasePermission):
+    """Catálogos compartilhados podem ser lidos por alunos e alterados por admins."""
+    def has_permission(self, request, view):
+        return request.method in SAFE_METHODS or _is_system_admin(request.user)

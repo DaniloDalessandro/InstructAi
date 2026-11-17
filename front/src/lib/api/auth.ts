@@ -61,6 +61,44 @@ export async function changePassword(data: ChangePasswordData): Promise<void> {
   }
 }
 
+// ── Password Reset ──────────────────────────────────────────────────────────
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  const response = await fetch(`${API_URL}/api/v1/accounts/password-reset/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  })
+  if (!response.ok) {
+    const err = await response.json()
+    throw new Error(err.detail || 'Erro ao solicitar redefinição de senha')
+  }
+}
+
+export async function validateResetToken(token: string): Promise<{ email: string }> {
+  const response = await fetch(`${API_URL}/api/v1/accounts/password-reset/validate/${token}/`)
+  if (!response.ok) {
+    throw new Error('Link inválido ou expirado')
+  }
+  return response.json()
+}
+
+export async function confirmPasswordReset(
+  token: string,
+  password: string,
+  confirm_password: string,
+): Promise<void> {
+  const response = await fetch(`${API_URL}/api/v1/accounts/password-reset/confirm/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, password, confirm_password }),
+  })
+  if (!response.ok) {
+    const err = await response.json()
+    throw new Error(err.detail || 'Erro ao redefinir senha')
+  }
+}
+
 // Realiza logout limpando dados locais
 export async function logout(): Promise<void> {
   // O backend não possui endpoint de logout (tokens JWT são stateless)

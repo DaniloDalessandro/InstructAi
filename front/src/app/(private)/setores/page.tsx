@@ -1,5 +1,6 @@
 "use client"
 
+import AdminGuard from "@/components/auth/AdminGuard"
 import React, { useState, useEffect, useCallback } from "react"
 import { DataTable } from "@/components/ui/data-table"
 import SectorForm from "@/components/forms/SectorForm"
@@ -18,7 +19,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
-export default function SectorsPage() {
+function SectorsPageContent() {
   const [sectors, setSectors] = useState<Sector[]>([])
   const [totalCount, setTotalCount] = useState(0)
   const [pageIndex, setPageIndex] = useState(0)
@@ -45,7 +46,7 @@ export default function SectorsPage() {
         page_size: pageSize,
         search: searchQuery || undefined,
         ordering: ordering || undefined,
-        is_active: statusFilter === "all" ? undefined : statusFilter,
+        is_active: statusFilter,
       })
       setSectors(response.results)
       setTotalCount(response.count)
@@ -253,4 +254,8 @@ export default function SectorsPage() {
       </AlertDialog>
     </div>
   )
+}
+
+export default function SectorsPage() {
+  return <AdminGuard><SectorsPageContent /></AdminGuard>
 }

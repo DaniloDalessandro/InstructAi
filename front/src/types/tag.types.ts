@@ -14,6 +14,7 @@ export interface Tag {
 }
 
 export interface TagFormData {
+  is_active?: boolean;
   name: string;
   color?: string;
 }
