@@ -20,9 +20,10 @@ import { changePassword, ChangePasswordData } from '@/lib/api/auth'
 interface ChangePasswordFormProps {
   isOpen: boolean
   onClose: () => void
+  mandatory?: boolean
 }
 
-export function ChangePasswordForm({ isOpen, onClose }: ChangePasswordFormProps) {
+export function ChangePasswordForm({ isOpen, onClose, mandatory = false }: ChangePasswordFormProps) {
 
   const [formData, setFormData] = useState<ChangePasswordData & { confirmPassword: string }>({
     old_password: '',
@@ -111,7 +112,7 @@ export function ChangePasswordForm({ isOpen, onClose }: ChangePasswordFormProps)
   }
 
   const handleClose = () => {
-    if (!loading) {
+    if (!loading && !mandatory) {
       onClose()
       setFormData({ old_password: '', new_password: '', confirmPassword: '' })
       setError('')
@@ -127,14 +128,14 @@ export function ChangePasswordForm({ isOpen, onClose }: ChangePasswordFormProps)
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogPortal>
-        <DialogContent className="sm:max-w-md w-[90vw]">
+        <DialogContent className={`sm:max-w-md w-[90vw] ${mandatory ? "[&>button]:hidden" : ""}`} onEscapeKeyDown={e => mandatory && e.preventDefault()} onInteractOutside={e => mandatory && e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Lock className="h-5 w-5" />
             Alterar Senha
           </DialogTitle>
           <DialogDescription>
-            Digite sua senha atual e escolha uma nova senha segura.
+            {mandatory ? "No primeiro acesso, substitua a senha temporária por uma senha pessoal." : "Digite sua senha atual e escolha uma nova senha segura."}
           </DialogDescription>
         </DialogHeader>
 
@@ -271,9 +272,7 @@ export function ChangePasswordForm({ isOpen, onClose }: ChangePasswordFormProps)
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>
-                Cancelar
-              </Button>
+              {!mandatory && <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>Cancelar</Button>}
               <Button type="submit" disabled={loading || !passwordValidation.minLength}>
                 {loading ? 'Alterando...' : 'Alterar Senha'}
               </Button>

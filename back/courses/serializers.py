@@ -1,11 +1,35 @@
 from rest_framework import serializers
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema_field, inline_serializer
 from .models import Course, Lesson, Question, CourseProgress, LessonProgress, Certificate
 from sectors.serializers import SectorSerializer
 from tags.serializers import TagSerializer
 from access.permissions import get_user_permissions
 
+_permissions_field = inline_serializer("CourseUserPermissions", {
+    "can_edit": serializers.BooleanField(),
+    "can_delete": serializers.BooleanField(),
+    "can_manage_access": serializers.BooleanField(),
+})
 
-class LessonSerializer(serializers.ModelSerializer):
+_user_progress_field = inline_serializer("CourseUserProgressSummary", {
+    "completion_percentage": serializers.IntegerField(),
+    "exam_passed": serializers.BooleanField(),
+    "completed_at": serializers.DateTimeField(allow_null=True),
+})
+
+
+class CourseChildSerializer(serializers.ModelSerializer):
+    def validate(self, data):
+        from rest_framework.exceptions import PermissionDenied
+        course = data.get('course') or getattr(self.instance, 'course', None)
+        request = self.context.get('request')
+        if request and course and not get_user_permissions(request.user, course)['can_edit']:
+            raise PermissionDenied('Você não tem permissão para editar este curso.')
+        return data
+
+
+class LessonSerializer(CourseChildSerializer):
     """Serializer para Aula"""
     youtube_video_id = serializers.SerializerMethodField()
 
@@ -18,7 +42,8 @@ class LessonSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'youtube_video_id']
 
-    def get_youtube_video_id(self, obj):
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_youtube_video_id(self, obj: Lesson) -> str | None:
         """Retorna o ID do vídeo do YouTube"""
         return obj.get_youtube_video_id()
 
@@ -37,8 +62,25 @@ class LessonSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 
-class QuestionSerializer(serializers.ModelSerializer):
+class QuestionSerializer(CourseChildSerializer):
     """Serializer para Questão"""
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        if request and not get_user_permissions(request.user, instance.course)['can_edit']:
+            data.pop('correct_option', None)
+        return data
+
+    def validate(self, data):
+        data = super().validate(data)
+        options = data.get('options', getattr(self.instance, 'options', []))
+        correct = data.get('correct_option', getattr(self.instance, 'correct_option', 0))
+        if not isinstance(options, list) or not 2 <= len(options) <= 4 or any(not isinstance(option, str) or not option.strip() for option in options):
+            raise serializers.ValidationError({'options':'Informe de duas a quatro alternativas preenchidas.'})
+        if type(correct) is not int or not 0 <= correct < len(options):
+            raise serializers.ValidationError({'correct_option':'Selecione uma alternativa correta existente.'})
+        return data
 
     class Meta:
         model = Question
@@ -99,7 +141,8 @@ class CourseProgressSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'course_name', 'can_generate_certificate']
 
-    def get_can_generate_certificate(self, obj):
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_can_generate_certificate(self, obj: CourseProgress) -> bool:
         """Verifica se pode gerar certificado"""
         return obj.can_generate_certificate()
 
@@ -133,15 +176,18 @@ class CourseSerializer(serializers.ModelSerializer):
             'user_permissions', 'notification_sent_at', 'availability_status',
         ]
 
-    def get_total_lessons(self, obj):
+    @extend_schema_field(OpenApiTypes.INT)
+    def get_total_lessons(self, obj: Course) -> int:
         return obj.get_total_lessons()
 
-    def get_availability_status(self, obj):
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_availability_status(self, obj: Course) -> str:
         return obj.get_availability_status()
 
-    def get_user_permissions(self, obj):
+    @extend_schema_field(_permissions_field)
+    def get_user_permissions(self, obj: Course) -> dict[str, bool]:
         request = self.context.get('request')
-        if request and request.user:
+        if request and request.user and request.user.is_authenticated:
             return get_user_permissions(request.user, obj)
         return {"can_edit": False, "can_delete": False, "can_manage_access": False}
 
@@ -213,23 +259,27 @@ class CourseListSerializer(serializers.ModelSerializer):
             'available_from', 'available_until', 'availability_status',
         ]
 
-    def get_total_lessons(self, obj):
+    @extend_schema_field(OpenApiTypes.INT)
+    def get_total_lessons(self, obj: Course) -> int:
         return obj.get_total_lessons()
 
-    def get_availability_status(self, obj):
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_availability_status(self, obj: Course) -> str:
         return obj.get_availability_status()
 
-    def get_first_lesson_video_id(self, obj):
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_first_lesson_video_id(self, obj: Course) -> str | None:
         """Retorna o ID do vídeo da primeira aula para thumbnail"""
         first_lesson = obj.lessons.filter(is_active=True).order_by('order').first()
         if first_lesson:
             return first_lesson.get_youtube_video_id()
         return None
 
-    def get_user_progress(self, obj):
+    @extend_schema_field(_user_progress_field)
+    def get_user_progress(self, obj: Course) -> dict[str, object] | None:
         """Retorna o progresso do usuário no curso"""
         request = self.context.get('request')
-        if request and hasattr(request, 'user'):
+        if request and hasattr(request, 'user') and request.user.is_authenticated:
             try:
                 progress = CourseProgress.objects.get(user=request.user, course=obj)
                 return {
@@ -256,11 +306,12 @@ class CertificateSerializer(serializers.ModelSerializer):
         model = Certificate
         fields = [
             'id', 'user', 'user_name', 'course', 'course_name',
-            'validation_code', 'pdf_file', 'pdf_url', 'issued_at', 'created_at'
+            'validation_code', 'pdf_file', 'pdf_url', 'issued_at', 'created_at', 'issuer_snapshot'
         ]
-        read_only_fields = ['id', 'validation_code', 'issued_at', 'created_at', 'pdf_url']
+        read_only_fields = ['id', 'validation_code', 'issued_at', 'created_at', 'pdf_url', 'issuer_snapshot']
 
-    def get_pdf_url(self, obj):
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_pdf_url(self, obj: Certificate) -> str | None:
         """Retorna a URL completa do PDF"""
         if obj.pdf_file:
             request = self.context.get('request')

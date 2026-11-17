@@ -296,7 +296,7 @@ export async function deleteTutorialMedia(id: string): Promise<void> {
 // ==================== SHARE / ACCESS ====================
 
 export async function getSharedAdminsTutorial(id: string): Promise<{ id: number; email: string; name: string }[]> {
-  const response = await authFetch(`${API_BASE_URL}/${id}/share/`, { method: 'GET' });
+  const response = await authFetch(`${API_BASE_URL}/tutorials/${id}/share/`, { method: 'GET' });
   if (!response.ok) throw new Error('Erro ao buscar administradores');
   const data = await response.json();
   return data.shared_admins;
@@ -306,7 +306,7 @@ export async function updateSharedAdminsTutorial(
   id: string,
   payload: { add?: string[]; remove?: string[] }
 ): Promise<{ shared_admins: { id: number; email: string; name: string }[]; errors?: string[] }> {
-  const response = await authFetch(`${API_BASE_URL}/${id}/share/`, {
+  const response = await authFetch(`${API_BASE_URL}/tutorials/${id}/share/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

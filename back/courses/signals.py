@@ -1,64 +1,58 @@
+import logging
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils import timezone
-from .models import CourseProgress, Certificate, Course
-from .certificate_generator import generate_certificate_pdf
+from .models import CourseProgress, Certificate, Course, IssuingCompany
+from .certificate_generator import generate_certificate_pdf as build_pdf_sync
+
+logger = logging.getLogger(__name__)
 
 
 @receiver(post_save, sender=CourseProgress)
 def check_course_completion(sender, instance, created, **kwargs):
     """
-    Signal para detectar conclusão do curso e gerar certificado automaticamente.
-
-    Um curso é considerado concluído quando:
-    - Completion_percentage = 100%
-    - Se houver prova final, exam_passed = True
+    Detecta conclusão do curso e gera certificado automaticamente.
+    Condições: completion_percentage = 100% e, se houver prova, exam_passed = True.
     """
-    # Só processar se o progresso for 100%
     if instance.completion_percentage != 100:
         return
 
     course = instance.course
 
-    # Se o curso tem prova final, verificar se passou
     if course.has_final_exam and not instance.exam_passed:
         return
 
-    # Atualizar completed_at se ainda não estiver definido
     if not instance.completed_at:
         instance.completed_at = timezone.now()
         instance.save(update_fields=['completed_at'])
 
-    # Verificar se já existe certificado
-    certificate_exists = Certificate.objects.filter(
+    already_exists = Certificate.objects.filter(
         user=instance.user,
-        course=course
+        course=course,
     ).exists()
 
-    if not certificate_exists:
-        # Gerar certificado
-        certificate = Certificate.objects.create(
-            user=instance.user,
-            course=course
-        )
-        print(f'[OK] Certificado gerado para {instance.user.email} - Curso: {course.name}')
+    if not already_exists and IssuingCompany.objects.filter(pk=1).exists():
+        Certificate.objects.create(user=instance.user, course=course)
+        logger.info('Certificado criado para %s — curso: %s', instance.user.email, course.name)
 
 
 @receiver(post_save, sender=Certificate)
 def generate_certificate_pdf_on_create(sender, instance, created, **kwargs):
     """
-    Gera o PDF do certificado quando um certificado é criado.
+    Gera o PDF quando um certificado é criado.
+    Tenta geração síncrona; em caso de falha, agenda task Celery como fallback.
     """
-    if created and not instance.pdf_file:
+    if not created or instance.pdf_file:
+        return
+
+    try:
+        pdf_content = build_pdf_sync(instance)
+        instance.pdf_file.save(pdf_content.name, pdf_content, save=True)
+        logger.info('PDF do certificado %d gerado: %s', instance.id, instance.pdf_file.name)
+    except Exception as exc:
+        logger.error('Falha na geração síncrona do PDF %d: %s — agendando via Celery', instance.id, exc)
         try:
-            # Gerar PDF
-            pdf_content = generate_certificate_pdf(instance)
-
-            # Salvar PDF no modelo
-            instance.pdf_file.save(pdf_content.name, pdf_content, save=True)
-
-            print(f'[OK] PDF do certificado gerado: {instance.pdf_file.name}')
-        except Exception as e:
-            print(f'[ERRO] Erro ao gerar PDF do certificado: {str(e)}')
-            import traceback
-            traceback.print_exc()
+            from courses.tasks import generate_certificate_pdf as generate_pdf_task
+            generate_pdf_task.delay(instance.id)
+        except Exception as task_exc:
+            logger.error('Falha ao agendar task de PDF %d: %s', instance.id, task_exc)

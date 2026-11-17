@@ -10,21 +10,22 @@ export function middleware(request: NextRequest) {
 
   // Token de acesso nos cookies
   const accessToken = request.cookies.get('access')?.value
+  const hasSession = !!(accessToken || request.cookies.get('refresh')?.value)
 
   // Rotas que não exigem autenticação
-  const publicPaths = ['/login']
+  const publicPaths = ['/login', '/esqueci-senha', '/redefinir-senha', '/cadastro', '/validar-certificado']
   const isPublicPath = publicPaths.some(path => pathname.startsWith(path))
 
   // Raiz: redirecionar baseado na autenticação
   if (pathname === '/') {
-    if (accessToken) {
+    if (hasSession) {
       return NextResponse.redirect(new URL('/dashboard', request.url))
     }
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
   // Rota privada sem token — redirecionar para login
-  if (!isPublicPath && !accessToken) {
+  if (!isPublicPath && !hasSession) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 

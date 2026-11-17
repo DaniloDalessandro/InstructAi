@@ -154,6 +154,13 @@ export function DataTable<TData>({
 
   const [columnVisibility, setColumnVisibility] = React.useState(() => getInitialColumnVisibility());
   const [selectedRow, setSelectedRow] = React.useState<TData | null>(null);
+  React.useEffect(() => {
+    setSelectedRow(previous => {
+      if (!previous) return null;
+      const id = (previous as { id?: unknown }).id;
+      return data.find(item => id === undefined ? item === previous : (item as { id?: unknown }).id === id) ?? null;
+    });
+  }, [data]);
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(initialFilters);
   const [openFilterId, setOpenFilterId] = React.useState<string | null>(null);

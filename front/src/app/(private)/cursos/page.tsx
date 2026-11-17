@@ -93,11 +93,18 @@ export default function CursosPage() {
     setIsLoading(true);
     try {
       const [coursesRes, tagsRes, sectorsRes] = await Promise.all([
-        getCourses({ is_active: 'true' }),
+        getCourses({ is_active: 'true', page_size: 200 }),
         getTags({ is_active: 'true', page_size: 100 }),
         getSectors({ is_active: 'true', page_size: 100 }),
       ]);
-      setCourses(coursesRes.results);
+      const allCourses = [...coursesRes.results];
+      let next = coursesRes.next;
+      for (let page = 2; next; page++) {
+        const response = await getCourses({ is_active: 'true', page_size: 200, page });
+        allCourses.push(...response.results);
+        next = response.next;
+      }
+      setCourses(allCourses);
       setTags(tagsRes.results);
       setSectors(sectorsRes.results);
     } catch {
@@ -115,8 +122,8 @@ export default function CursosPage() {
         const q = search.toLowerCase();
         if (!c.name.toLowerCase().includes(q) && !c.description.toLowerCase().includes(q)) return false;
       }
-      if (selectedTags.length > 0 && !selectedTags.some((id) => c.tags.includes(id))) return false;
-      if (selectedSectors.length > 0 && !selectedSectors.includes(c.sector)) return false;
+      if (selectedTags.length > 0 && !selectedTags.some((id) => c.tags.map(String).includes(String(id)))) return false;
+      if (selectedSectors.length > 0 && !selectedSectors.map(String).includes(String(c.sector))) return false;
       if (statusFilters.length > 0 && !statusFilters.includes(getCourseStatus(c))) return false;
       return true;
     });

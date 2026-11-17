@@ -385,21 +385,47 @@ export async function updateSharedAdminsCourse(
   return response.json();
 }
 
+// ==================== DASHBOARD STATS ====================
+
+export interface DashboardStats {
+  courses: { total: number; active: number; with_exam: number };
+  enrollments: { total: number; completed: number; in_progress: number; not_started: number };
+  exams: { submitted: number; passed: number; approval_rate: number; avg_score: number };
+  certificates: { total: number };
+  activity: { day: string; date: string; value: number }[];
+  top_courses: { name: string; enrollments: number }[];
+}
+
+export async function getDashboardStats(): Promise<DashboardStats> {
+  const response = await authFetch(`${BASE_URL}/dashboard-stats/`, { method: 'GET' });
+  if (!response.ok) throw new Error('Erro ao buscar estatísticas');
+  return response.json();
+}
+
 // ==================== CERTIFICATES ====================
 
-export async function getCertificates(): Promise<Certificate[]> {
-  const url = `${BASE_URL}/certificates/`;
-
-  const response = await authFetch(url, {
-    method: 'GET',
-  });
-
+export async function regenerateCertificatePdf(certificateId: number): Promise<Certificate> {
+  const url = `${BASE_URL}/certificates/${certificateId}/regenerate_pdf/`;
+  const response = await authFetch(url, { method: 'POST' });
   if (!response.ok) {
-    throw new Error('Erro ao buscar certificados');
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Erro ao re-gerar certificado');
   }
+  return response.json();
+}
 
-  const data = await response.json();
-  return data.results || data;
+export async function getCertificates(): Promise<Certificate[]> {
+  const certificates: Certificate[] = [];
+  let url: string | null = `${BASE_URL}/certificates/?page_size=200`;
+  while (url) {
+    const response = await authFetch(url);
+    if (!response.ok) throw new Error('Erro ao buscar certificados');
+    const data = await response.json();
+    if (Array.isArray(data)) return data;
+    certificates.push(...data.results);
+    url = data.next;
+  }
+  return certificates;
 }
 
 export async function generateCertificate(courseId: string): Promise<Certificate> {

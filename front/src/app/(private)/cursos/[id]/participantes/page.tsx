@@ -303,8 +303,10 @@ export default function CourseParticipantsPage() {
       const link = document.createElement('a');
       link.href = url;
       link.download = `participantes-${course?.name ?? courseId}.csv`;
+      document.body.appendChild(link);
       link.click();
-      URL.revokeObjectURL(url);
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch {
       toast({ title: 'Erro', description: 'Não foi possível exportar.', variant: 'destructive' });
     } finally {

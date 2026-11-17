@@ -1,11 +1,3 @@
-"""
-Configurações do Django para o projeto InstructAI.
-
-Para mais informações consulte:
-https://docs.djangoproject.com/en/6.0/topics/settings/
-https://docs.djangoproject.com/en/6.0/ref/settings/
-"""
-
 import os
 from datetime import timedelta
 from pathlib import Path
@@ -35,6 +27,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "corsheaders",
     "django_filters",
+    "drf_spectacular",
     # Local apps
     "accounts",
     "tutorial",
@@ -188,6 +181,17 @@ FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 600  # 10 min max por task
 
+CELERY_BEAT_SCHEDULE = {
+    'deactivate-expired-courses': {
+        'task': 'courses.tasks.deactivate_expired_courses',
+        'schedule': 300,  # a cada 5 minutos
+    },
+    'send-course-reminders': {
+        'task': 'courses.tasks.send_course_reminders',
+        'schedule': 1800,  # a cada 30 minutos
+    },
+}
+
 # Modelo de usuário customizado
 AUTH_USER_MODEL = "accounts.CustomUser"
 
@@ -209,8 +213,35 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "DEFAULT_PAGINATION_CLASS": "core.pagination.StandardPagination",
     "PAGE_SIZE": 10,
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+# ── drf-spectacular ─────────────────────────────────────────────────────────
+SPECTACULAR_SETTINGS = {
+    "TITLE": "InstructAI API",
+    "DESCRIPTION": (
+        "API de gestão de conhecimento corporativo com IA.\n\n"
+        "## Autenticação\n"
+        "Todos os endpoints (exceto os públicos) exigem JWT.\n"
+        "Faça login em `/api/v1/accounts/token/` para obter o `access` token "
+        "e envie-o no header: `Authorization: Bearer <token>`.\n\n"
+        "## Fluxos principais\n"
+        "- **Autenticação**: login, refresh, perfil, troca de senha, recuperação de senha\n"
+        "- **Conteúdo**: manuais (PDF), tutoriais (passos + mídia), cursos (lições + provas)\n"
+        "- **Alice**: chat RAG com streaming SSE, histórico de sessões\n"
+        "- **Admin**: usuários, convites, tags, setores\n"
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    "SCHEMA_PATH_PREFIX": r"/api/v1/",
+    "SWAGGER_UI_SETTINGS": {
+        "persistAuthorization": True,
+        "displayRequestDuration": True,
+    },
+    "SECURITY": [{"jwtAuth": []}],
 }
 
 # Simple JWT

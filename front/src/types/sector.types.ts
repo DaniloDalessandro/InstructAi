@@ -13,6 +13,7 @@ export interface Sector {
 }
 
 export interface SectorFormData {
+  is_active?: boolean;
   name: string;
 }
 

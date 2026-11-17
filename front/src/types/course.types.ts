@@ -130,8 +130,8 @@ export interface ExamSubmission {
 
 export interface QuestionResult {
   correct: boolean;
-  your_answer: string;
-  correct_answer: string;
+  your_answer: number | null;
+  correct_answer: number;
 }
 
 export interface ExamResult {
@@ -144,12 +144,13 @@ export interface ExamResult {
 }
 
 export interface Certificate {
-  id: string;
+  id: number;
   user: string;
   user_name: string;
   course: string;
   course_name: string;
   validation_code: string;
+  issuer_snapshot?: { name?: string; cnpj?: string };
   pdf_file: string | null;
   pdf_url: string | null;
   issued_at: string;

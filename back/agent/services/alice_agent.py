@@ -52,9 +52,8 @@ def _build_agent(streaming: bool = False):
         return _agent_cache[cache_key]
 
     from langchain_openai import ChatOpenAI
-    from langchain.agents import create_react_agent, AgentExecutor
+    from langchain.agents import create_tool_calling_agent, AgentExecutor
     from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-    from langchain import hub
 
     llm = ChatOpenAI(
         model=settings.OPENAI_CHAT_MODEL,
@@ -72,7 +71,7 @@ def _build_agent(streaming: bool = False):
         MessagesPlaceholder("agent_scratchpad"),
     ])
 
-    agent = create_react_agent(llm, ALICE_TOOLS, prompt)
+    agent = create_tool_calling_agent(llm, ALICE_TOOLS, prompt)
     executor = AgentExecutor(
         agent=agent,
         tools=ALICE_TOOLS,
@@ -159,7 +158,7 @@ def stream_alice(
     if not settings.OPENAI_API_KEY:
         payload = json.dumps({
             "type": "error",
-            "message": "OPENAI_API_KEY não configurada.",
+            "message": "A Alice está indisponível. Peça ao administrador para configurar o serviço de IA.",
         }, ensure_ascii=False)
         yield f"data: {payload}\n\n"
         return
@@ -196,7 +195,7 @@ def stream_alice(
     def run_in_thread():
         try:
             from langchain_openai import ChatOpenAI
-            from langchain.agents import create_react_agent, AgentExecutor
+            from langchain.agents import create_tool_calling_agent, AgentExecutor
             from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
             llm = ChatOpenAI(
@@ -215,7 +214,7 @@ def stream_alice(
                 MessagesPlaceholder("agent_scratchpad"),
             ])
 
-            agent = create_react_agent(llm, ALICE_TOOLS, prompt)
+            agent = create_tool_calling_agent(llm, ALICE_TOOLS, prompt)
             executor = AgentExecutor(
                 agent=agent,
                 tools=ALICE_TOOLS,

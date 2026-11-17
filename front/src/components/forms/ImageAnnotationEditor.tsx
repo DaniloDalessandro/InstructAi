@@ -104,6 +104,7 @@ export default function ImageAnnotationEditor({
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [history, setHistory] = useState<Annotation[][]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [saveError, setSaveError] = useState('');
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [polygonPoints, setPolygonPoints] = useState<{ x: number; y: number }[]>([]);
@@ -166,6 +167,7 @@ export default function ImageAnnotationEditor({
     if (!ctx) return;
 
     const img = new Image();
+    img.crossOrigin = 'anonymous';
     img.onload = () => {
       const maxWidth = 3000;
       const maxHeight = 1200;
@@ -693,7 +695,7 @@ export default function ImageAnnotationEditor({
       return;
     }
 
-    if (!isDrawing || !selectedTool || selectedTool === 'select') return;
+    if (!isDrawing || !selectedTool) return;
 
     const pos = getMousePos(e);
     let newAnnotation: Annotation | null = null;
@@ -838,7 +840,7 @@ export default function ImageAnnotationEditor({
     const annotation = annotations.find(a => a.id === selectedAnnotationId);
     if (!annotation) return;
 
-    const duplicated = {
+    const duplicated: Annotation = {
       ...JSON.parse(JSON.stringify(annotation)),
       id: Math.random().toString(36).substr(2, 9)
     };
@@ -851,7 +853,7 @@ export default function ImageAnnotationEditor({
     if (duplicated.toX !== undefined) duplicated.toX += 20;
     if (duplicated.toY !== undefined) duplicated.toY += 20;
     if (duplicated.points) {
-      duplicated.points = duplicated.points.map(p => ({ x: p.x + 20, y: p.y + 20 }));
+      duplicated.points = duplicated.points.map((p) => ({ x: p.x + 20, y: p.y + 20 }));
     }
 
     const newAnnotations = [...annotations, duplicated];
@@ -937,20 +939,30 @@ export default function ImageAnnotationEditor({
   };
 
   const handleSave = () => {
-    // Cancela o modo polígono se estiver ativo
-    if (polygonPoints.length > 0) {
-      setPolygonPoints([]);
-      setCurrentPolygonId(null);
-    }
-
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    canvas.toBlob((blob) => {
-      if (blob) {
-        onSave(blob);
+    const sourceCanvas = canvasRef.current;
+    if (!sourceCanvas) return;
+    setSaveError('');
+    const image = new Image();
+    image.crossOrigin = 'anonymous';
+    image.onload = () => {
+      const output = document.createElement('canvas');
+      output.width = sourceCanvas.width;
+      output.height = sourceCanvas.height;
+      const context = output.getContext('2d');
+      if (!context) return;
+      context.drawImage(image,0,0,output.width,output.height);
+      annotations.forEach(annotation => drawAnnotation(context,annotation,false));
+      try {
+        output.toBlob(blob => {
+          if (blob) onSave(blob);
+          else setSaveError('Não foi possível salvar a imagem. Tente novamente.');
+        }, 'image/jpeg', .95);
+      } catch {
+        setSaveError('Não foi possível exportar a imagem. Envie novamente o arquivo e tente outra vez.');
       }
-    }, 'image/jpeg', 0.95);
+    };
+    image.onerror = () => setSaveError('Não foi possível carregar a imagem para salvar.');
+    image.src = imageUrl;
   };
 
   const selectedAnnotation = selectedAnnotationId ? annotations.find(a => a.id === selectedAnnotationId) : null;
@@ -1272,6 +1284,7 @@ export default function ImageAnnotationEditor({
           </div>
         </div>
 
+        {saveError && <p role="alert" className="text-sm text-destructive">{saveError}</p>}
         <DialogFooter className="flex-shrink-0">
           <Button type="button" variant="outline" onClick={onClose}>
             Cancelar
@@ -1302,6 +1315,7 @@ export default function ImageAnnotationEditor({
             onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmTextAnnotation(); }}
           />
         </div>
+        {saveError && <p role="alert" className="text-sm text-destructive">{saveError}</p>}
         <DialogFooter>
           <Button
             type="button"

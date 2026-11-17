@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, Edit, Download, Loader2, BookOpen, Users } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { getVideoEmbedUrl } from '@/lib/utils/video';
 import { canEdit, canManageAccess } from '@/lib/permissions';
 import { ShareAccessDialog } from '@/components/shared/ShareAccessDialog';
 import { getSharedAdminsTutorial, updateSharedAdminsTutorial } from '@/lib/api/tutorials';
@@ -564,7 +565,8 @@ export default function TutorialViewPage() {
                             {media.media_type === 'video_embed' && media.embed_url && (
                               <figure className="m-0">
                                 <iframe
-                                  src={media.embed_url}
+                                  src={getVideoEmbedUrl(media.embed_url)}
+                                  title={media.caption || step.title}
                                   className="w-full aspect-video rounded-xl border border-border/40"
                                   allowFullScreen
                                 />

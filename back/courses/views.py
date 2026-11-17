@@ -1,11 +1,20 @@
+from datetime import timedelta
+
 from django.utils import timezone
-from django.db.models import Q
-from rest_framework import viewsets, filters, status
+from django.db.models import Q, Count, Avg
+from django.db.models.functions import TruncDate
+from rest_framework import viewsets, filters, status, serializers as s
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Course, Lesson, Question, CourseProgress, LessonProgress, Certificate
+from drf_spectacular.utils import (
+    extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse, inline_serializer,
+)
+from drf_spectacular.types import OpenApiTypes
+from .models import Course, Lesson, Question, CourseProgress, LessonProgress, Certificate, IssuingCompany
 from .serializers import (
     CourseSerializer, CourseListSerializer, LessonSerializer,
     QuestionSerializer, QuestionPublicSerializer,
@@ -13,11 +22,36 @@ from .serializers import (
 )
 from access.permissions import ContentPermission, CanManageAccess
 
+_detail_msg = inline_serializer("CourseDetailMsg", {"detail": s.CharField()})
+_error_msg = inline_serializer("CourseErrorMsg", {"error": s.CharField()})
+_shared_admins_response = inline_serializer("CourseSharedAdmins", {
+    "shared_admins": inline_serializer("CourseAdminInfo", {
+        "id": s.IntegerField(),
+        "email": s.EmailField(),
+        "name": s.CharField(),
+    }, many=True),
+})
 
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Cursos"],
+        summary="Lista cursos",
+        parameters=[
+            OpenApiParameter("is_active", OpenApiTypes.BOOL, description="Filtra por status (padrão: true)"),
+            OpenApiParameter("sector", OpenApiTypes.INT, description="Filtra por setor"),
+            OpenApiParameter("tags", OpenApiTypes.INT, description="Filtra por tag"),
+            OpenApiParameter("has_final_exam", OpenApiTypes.BOOL, description="Filtra cursos com prova"),
+            OpenApiParameter("search", OpenApiTypes.STR, description="Busca por nome ou descrição"),
+        ],
+    ),
+    retrieve=extend_schema(tags=["Cursos"], summary="Detalha curso"),
+    create=extend_schema(tags=["Cursos"], summary="Cria curso"),
+    update=extend_schema(tags=["Cursos"], summary="Atualiza curso"),
+    partial_update=extend_schema(tags=["Cursos"], summary="Atualiza curso parcialmente"),
+    destroy=extend_schema(tags=["Cursos"], summary="Remove curso"),
+)
 class CourseViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet for Course model
-    """
     queryset = Course.objects.all().prefetch_related('tags', 'lessons', 'questions')
     permission_classes = [IsAuthenticated, ContentPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -27,7 +61,6 @@ class CourseViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
 
     def get_serializer_class(self):
-        """Use different serializer for list"""
         if self.action == 'list':
             return CourseListSerializer
         return CourseSerializer
@@ -96,6 +129,15 @@ class CourseViewSet(viewsets.ModelViewSet):
         log_action(self.request.user, 'delete', 'course', instance, request=self.request)
         instance.delete()
 
+    @extend_schema(
+        tags=["Cursos"],
+        summary="Gerencia administradores delegados do curso",
+        request=inline_serializer("CourseShareRequest", {
+            "add": s.ListField(child=s.EmailField(), required=False),
+            "remove": s.ListField(child=s.EmailField(), required=False),
+        }),
+        responses={200: _shared_admins_response},
+    )
     @action(detail=True, methods=['get', 'post'], permission_classes=[IsAuthenticated, CanManageAccess])
     def share(self, request, pk=None):
         """
@@ -140,6 +182,18 @@ class CourseViewSet(viewsets.ModelViewSet):
             data['errors'] = errors
         return Response(data)
 
+    @extend_schema(
+        tags=["Cursos"],
+        summary="Envia ou agenda notificação por e-mail para usuários elegíveis",
+        responses={
+            200: inline_serializer("NotificationResult", {
+                "detail": s.CharField(),
+                "recipient_count": s.IntegerField(),
+                "scheduled": s.BooleanField(),
+                "scheduled_for": s.DateTimeField(allow_null=True),
+            }),
+        },
+    )
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, CanManageAccess])
     def send_notification(self, request, pk=None):
         """
@@ -154,7 +208,6 @@ class CourseViewSet(viewsets.ModelViewSet):
         User = get_user_model()
         now = timezone.now()
 
-        # Contar destinatários
         recipients = User.objects.filter(is_active=True).exclude(email='')
         if not course.available_for_all_sectors:
             allowed = course.allowed_sectors.all()
@@ -190,13 +243,21 @@ class CourseViewSet(viewsets.ModelViewSet):
             'scheduled_for': course.available_from.isoformat() if scheduled else None,
         })
 
-    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated, CanManageAccess])
+    @extend_schema(
+        tags=["Cursos"],
+        summary="Lista participantes do curso com status de progresso (admin)",
+        parameters=[
+            OpenApiParameter("search", OpenApiTypes.STR, description="Busca por nome ou e-mail"),
+            OpenApiParameter("cpf", OpenApiTypes.STR, description="Filtra por CPF"),
+            OpenApiParameter("sector", OpenApiTypes.INT, description="Filtra por setor"),
+            OpenApiParameter("status", OpenApiTypes.STR, enum=["all", "completed", "in_progress", "pending"]),
+            OpenApiParameter("ordering", OpenApiTypes.STR, enum=["name", "-name", "recent", "pending_first"]),
+            OpenApiParameter("page", OpenApiTypes.INT),
+            OpenApiParameter("page_size", OpenApiTypes.INT, description="Máx 100"),
+        ],
+    )
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated, CanManageAccess], filter_backends=[])
     def participants(self, request, pk=None):
-        """
-        Lista todos os usuários ativos com seu status neste curso.
-        Requer permissão de gerenciamento (owner ou admin).
-        Suporta filtros: search, cpf, sector, status, ordering.
-        """
         from django.contrib.auth import get_user_model
         from django.db.models import (
             Subquery, OuterRef, Value, IntegerField, BooleanField,
@@ -284,8 +345,14 @@ class CourseViewSet(viewsets.ModelViewSet):
         users = users.order_by(ordering_map.get(ordering, 'name'))
 
         # Paginação
-        page_size = min(int(request.query_params.get('page_size', 20)), 100)
-        page_number = max(int(request.query_params.get('page', 1)), 1)
+        try:
+            page_size = min(int(request.query_params.get('page_size', 20)), 100)
+        except (ValueError, TypeError):
+            page_size = 20
+        try:
+            page_number = max(int(request.query_params.get('page', 1)), 1)
+        except (ValueError, TypeError):
+            page_number = 1
         paginator = Paginator(users, page_size)
         page_obj = paginator.get_page(page_number)
 
@@ -335,9 +402,10 @@ class CourseViewSet(viewsets.ModelViewSet):
             'results': results,
         })
 
+    @extend_schema(tags=["Cursos"], summary="Retorna progresso do usuário autenticado no curso",
+                   responses={200: CourseProgressSerializer})
     @action(detail=True, methods=['get'])
     def progress(self, request, pk=None):
-        """Get user progress for this course"""
         course = self.get_object()
         progress, created = CourseProgress.objects.get_or_create(
             user=request.user,
@@ -346,9 +414,9 @@ class CourseViewSet(viewsets.ModelViewSet):
         serializer = CourseProgressSerializer(progress)
         return Response(serializer.data)
 
+    @extend_schema(tags=["Cursos"], summary="Retorna progresso por aula do usuário autenticado")
     @action(detail=True, methods=['get'])
     def lessons_progress(self, request, pk=None):
-        """Get user progress for all lessons in this course"""
         course = self.get_object()
         lessons = course.lessons.filter(is_active=True).order_by('order')
         progress_data = []
@@ -370,9 +438,10 @@ class CourseViewSet(viewsets.ModelViewSet):
 
         return Response(progress_data)
 
+    @extend_schema(tags=["Cursos"], summary="Retorna questões da prova final (sem gabarito)",
+                   responses={200: QuestionPublicSerializer(many=True), 400: _error_msg})
     @action(detail=True, methods=['get'])
     def exam(self, request, pk=None):
-        """Get exam questions for this course (without correct answers)"""
         course = self.get_object()
 
         if not course.has_final_exam:
@@ -385,9 +454,29 @@ class CourseViewSet(viewsets.ModelViewSet):
         serializer = QuestionPublicSerializer(questions, many=True)
         return Response(serializer.data)
 
-    @action(detail=True, methods=['post'])
+    @extend_schema(
+        tags=["Cursos"],
+        summary="Submete respostas da prova e calcula nota",
+        request=inline_serializer("ExamSubmit", {
+            "answers": s.DictField(
+                child=s.IntegerField(),
+                help_text="Mapa {question_id: índice_da_alternativa}",
+            ),
+        }),
+        responses={
+            200: inline_serializer("ExamResult", {
+                "score": s.IntegerField(),
+                "passed": s.BooleanField(),
+                "correct_count": s.IntegerField(),
+                "total_questions": s.IntegerField(),
+                "passing_score": s.IntegerField(),
+                "question_results": s.DictField(),
+            }),
+            400: _error_msg,
+        },
+    )
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def submit_exam(self, request, pk=None):
-        """Submit exam answers and calculate score"""
         course = self.get_object()
 
         if not course.has_final_exam:
@@ -396,34 +485,40 @@ class CourseViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        answers = request.data.get('answers', {})  # {question_id: index_int}
+        answers = request.data.get('answers', {})
         questions = course.questions.all()
+        total_questions = questions.count()
 
-        if len(answers) != questions.count():
+        if total_questions == 0:
             return Response(
-                {'error': 'Você deve responder todas as questões'},
+                {'error': 'Este curso não possui questões cadastradas.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        question_map = {str(question.id): question for question in questions}
+        if not isinstance(answers, dict) or set(answers) - set(question_map):
+            return Response({'error': 'Respostas inválidas para esta prova.'}, status=status.HTTP_400_BAD_REQUEST)
+        for question_id, answer in answers.items():
+            if type(answer) is not int or not 0 <= answer < len(question_map[question_id].options):
+                return Response({'error': 'Alternativa inválida.'}, status=status.HTTP_400_BAD_REQUEST)
 
         correct_count = 0
         question_results = {}
         for question in questions:
             q_id = str(question.id)
-            if q_id in answers:
-                user_answer = int(answers[q_id])
-                is_correct = user_answer == question.correct_option
-                if is_correct:
-                    correct_count += 1
-                question_results[q_id] = {
-                    'correct': is_correct,
-                    'your_answer': user_answer,
-                    'correct_answer': question.correct_option,
-                }
+            user_answer = answers.get(q_id)
+            is_correct = user_answer == question.correct_option
+            if is_correct:
+                correct_count += 1
+            question_results[q_id] = {
+                'correct': is_correct,
+                'your_answer': user_answer,
+                'correct_answer': question.correct_option,
+            }
 
-        score = int((correct_count / questions.count()) * 100)
+        score = int((correct_count / total_questions) * 100)
         passed = score >= course.passing_score
 
-        # Update course progress
         progress, created = CourseProgress.objects.get_or_create(
             user=request.user,
             course=course
@@ -442,10 +537,22 @@ class CourseViewSet(viewsets.ModelViewSet):
         })
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Aulas"],
+        summary="Lista aulas",
+        parameters=[
+            OpenApiParameter("course", OpenApiTypes.INT, description="Filtra por curso"),
+            OpenApiParameter("is_active", OpenApiTypes.BOOL),
+        ],
+    ),
+    retrieve=extend_schema(tags=["Aulas"], summary="Detalha aula"),
+    create=extend_schema(tags=["Aulas"], summary="Cria aula"),
+    update=extend_schema(tags=["Aulas"], summary="Atualiza aula"),
+    partial_update=extend_schema(tags=["Aulas"], summary="Atualiza aula parcialmente"),
+    destroy=extend_schema(tags=["Aulas"], summary="Remove aula"),
+)
 class LessonViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet for Lesson model
-    """
     queryset = Lesson.objects.all().select_related('course')
     serializer_class = LessonSerializer
     permission_classes = [IsAuthenticated, ContentPermission]
@@ -454,12 +561,17 @@ class LessonViewSet(viewsets.ModelViewSet):
     ordering_fields = ['order', 'created_at']
     ordering = ['order']
 
-    @action(detail=True, methods=['post'])
+    def get_queryset(self):
+        from .visibility import visible_courses
+        return super().get_queryset().filter(course__in=visible_courses(self.request.user))
+
+
+    @extend_schema(tags=["Aulas"], summary="Marca aula como concluída",
+                   responses={200: LessonProgressSerializer})
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def complete(self, request, pk=None):
-        """Mark lesson as completed"""
         lesson = self.get_object()
 
-        # Create or update lesson progress
         progress, created = LessonProgress.objects.get_or_create(
             user=request.user,
             lesson=lesson
@@ -470,14 +582,12 @@ class LessonViewSet(viewsets.ModelViewSet):
             progress.completed_at = timezone.now()
             progress.save()
 
-            # Update course completion percentage
             self._update_course_progress(lesson.course, request.user)
 
         serializer = LessonProgressSerializer(progress)
         return Response(serializer.data)
 
     def _update_course_progress(self, course, user):
-        """Calculate and update course completion percentage"""
         total_lessons = course.lessons.filter(is_active=True).count()
         if total_lessons == 0:
             # Curso sem aulas: considera 100% se só tem prova
@@ -485,7 +595,6 @@ class LessonViewSet(viewsets.ModelViewSet):
             progress.completion_percentage = 100
             if not course.has_final_exam or progress.exam_passed:
                 if not progress.completed_at:
-                    from django.utils import timezone
                     progress.completed_at = timezone.now()
             progress.save()
             return
@@ -505,7 +614,6 @@ class LessonViewSet(viewsets.ModelViewSet):
         )
         progress.completion_percentage = completion_percentage
 
-        # Mark as completed if 100%
         if completion_percentage == 100 and not progress.completed_at:
             if not course.has_final_exam or progress.exam_passed:
                 progress.completed_at = timezone.now()
@@ -513,10 +621,19 @@ class LessonViewSet(viewsets.ModelViewSet):
         progress.save()
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Questões"],
+        summary="Lista questões de prova",
+        parameters=[OpenApiParameter("course", OpenApiTypes.INT, description="Filtra por curso")],
+    ),
+    retrieve=extend_schema(tags=["Questões"], summary="Detalha questão"),
+    create=extend_schema(tags=["Questões"], summary="Cria questão"),
+    update=extend_schema(tags=["Questões"], summary="Atualiza questão"),
+    partial_update=extend_schema(tags=["Questões"], summary="Atualiza questão parcialmente"),
+    destroy=extend_schema(tags=["Questões"], summary="Remove questão"),
+)
 class QuestionViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet for Question model
-    """
     queryset = Question.objects.all().select_related('course')
     serializer_class = QuestionSerializer
     permission_classes = [IsAuthenticated, ContentPermission]
@@ -525,37 +642,68 @@ class QuestionViewSet(viewsets.ModelViewSet):
     ordering_fields = ['order', 'created_at']
     ordering = ['order']
 
+    def get_queryset(self):
+        from .visibility import visible_courses
+        return super().get_queryset().filter(course__in=visible_courses(self.request.user))
 
+
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Progresso"],
+        summary="Lista progresso do usuário em todos os cursos",
+        parameters=[
+            OpenApiParameter("course", OpenApiTypes.INT),
+            OpenApiParameter("exam_passed", OpenApiTypes.BOOL),
+        ],
+    ),
+    retrieve=extend_schema(tags=["Progresso"], summary="Detalha progresso em um curso"),
+)
 class CourseProgressViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    ViewSet for CourseProgress model (read-only)
-    """
     serializer_class = CourseProgressSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['course', 'exam_passed']
 
     def get_queryset(self):
-        """Return only current user's progress"""
+        if getattr(self, 'swagger_fake_view', False):
+            return CourseProgress.objects.none()
+        if not self.request.user.is_authenticated:
+            return CourseProgress.objects.none()
         return CourseProgress.objects.filter(user=self.request.user).select_related('course')
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Certificados"],
+        summary="Lista certificados do usuário",
+        parameters=[OpenApiParameter("course", OpenApiTypes.INT)],
+    ),
+    retrieve=extend_schema(tags=["Certificados"], summary="Detalha certificado"),
+)
 class CertificateViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    ViewSet for Certificate model
-    """
     serializer_class = CertificateSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['course']
 
     def get_queryset(self):
-        """Return only current user's certificates"""
+        if getattr(self, 'swagger_fake_view', False):
+            return Certificate.objects.none()
+        if not self.request.user.is_authenticated:
+            return Certificate.objects.none()
         return Certificate.objects.filter(user=self.request.user).select_related('course')
 
+    @extend_schema(
+        tags=["Certificados"],
+        summary="Gera certificado para um curso concluído",
+        request=inline_serializer("CertificateGenerate", {"course_id": s.IntegerField()}),
+        responses={201: CertificateSerializer, 400: _error_msg, 404: _error_msg},
+    )
     @action(detail=False, methods=['post'])
     def generate(self, request):
-        """Generate certificate for a course"""
+        from .tasks import generate_certificate_pdf
+
         course_id = request.data.get('course_id')
 
         if not course_id:
@@ -572,7 +720,6 @@ class CertificateViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Check if user has completed the course
         try:
             progress = CourseProgress.objects.get(user=request.user, course=course)
         except CourseProgress.DoesNotExist:
@@ -587,16 +734,175 @@ class CertificateViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Check if certificate already exists
+        if not IssuingCompany.objects.filter(pk=1).exists():
+            return Response({'error': 'Cadastre a empresa emissora antes de emitir certificados.'}, status=status.HTTP_400_BAD_REQUEST)
+
         certificate, created = Certificate.objects.get_or_create(
             user=request.user,
             course=course
         )
 
-        if created:
-            # TODO: Generate PDF certificate
-            # For now, just create the record
-            pass
+        # Gera (ou re-gera) o PDF se não existir
+        if not certificate.pdf_file:
+            generate_certificate_pdf.delay(certificate.id)
 
         serializer = CertificateSerializer(certificate, context={'request': request})
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(
+        tags=["Certificados"],
+        summary="Re-gera o PDF de um certificado existente",
+        responses={200: CertificateSerializer, 403: _error_msg},
+    )
+    @action(detail=True, methods=['post'])
+    def regenerate_pdf(self, request, pk=None):
+        from .tasks import generate_certificate_pdf
+
+        certificate = self.get_object()
+
+        if certificate.user != request.user and not (request.user.is_staff or request.user.is_superuser):
+            return Response(
+                {'error': 'Sem permissão para re-gerar este certificado'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Remove o arquivo antigo para forçar a regeneração
+        if certificate.pdf_file:
+            try:
+                certificate.pdf_file.delete(save=True)
+            except Exception:
+                pass
+
+        generate_certificate_pdf.delay(certificate.id)
+
+        serializer = CertificateSerializer(certificate, context={'request': request})
+        return Response(serializer.data)
+
+
+_dashboard_response = inline_serializer("DashboardStats", {
+    "courses": inline_serializer("CourseStats", {
+        "total": s.IntegerField(), "active": s.IntegerField(), "with_exam": s.IntegerField(),
+    }),
+    "enrollments": inline_serializer("EnrollmentStats", {
+        "total": s.IntegerField(), "completed": s.IntegerField(),
+        "in_progress": s.IntegerField(), "not_started": s.IntegerField(),
+    }),
+    "exams": inline_serializer("ExamStats", {
+        "submitted": s.IntegerField(), "passed": s.IntegerField(),
+        "approval_rate": s.IntegerField(), "avg_score": s.FloatField(),
+    }),
+    "certificates": inline_serializer("CertStats", {"total": s.IntegerField()}),
+    "activity": inline_serializer("DayActivity", {
+        "day": s.CharField(), "date": s.DateField(), "value": s.IntegerField(),
+    }, many=True),
+    "top_courses": inline_serializer("TopCourse", {
+        "name": s.CharField(), "enrollments": s.IntegerField(),
+    }, many=True),
+})
+
+
+@extend_schema_view(
+    get=extend_schema(
+        tags=["Dashboard"],
+        summary="Estatísticas agregadas de cursos (admin)",
+        description="Retorna totais de cursos, matrículas, provas, certificados e atividade dos últimos 7 dias.",
+        responses={200: _dashboard_response},
+    )
+)
+class DashboardStatsView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request):
+        now = timezone.now()
+        seven_days_ago = now - timedelta(days=6)
+
+        # ── Cursos ───────────────────────────────────────────
+        total_courses = Course.objects.count()
+        active_courses = Course.objects.filter(is_active=True).count()
+        courses_with_exam = Course.objects.filter(has_final_exam=True, is_active=True).count()
+
+        # ── Matrículas / progresso ────────────────────────────
+        total_enrollments = CourseProgress.objects.count()
+        completed = CourseProgress.objects.filter(completion_percentage=100).count()
+        in_progress = CourseProgress.objects.filter(
+            completion_percentage__gt=0, completion_percentage__lt=100
+        ).count()
+
+        # ── Aprovações em provas ──────────────────────────────
+        exams_submitted = CourseProgress.objects.filter(exam_score__isnull=False).count()
+        exams_passed = CourseProgress.objects.filter(exam_passed=True).count()
+        approval_rate = round(exams_passed / exams_submitted * 100) if exams_submitted > 0 else 0
+
+        avg_exam_score = CourseProgress.objects.filter(
+            exam_score__isnull=False
+        ).aggregate(avg=Avg('exam_score'))['avg']
+        avg_exam_score = round(avg_exam_score or 0, 1)
+
+        # ── Certificados ──────────────────────────────────────
+        total_certificates = Certificate.objects.count()
+
+        # ── Atividade dos últimos 7 dias (aulas concluídas por dia) ──
+        activity_qs = (
+            LessonProgress.objects
+            .filter(is_completed=True, completed_at__gte=seven_days_ago)
+            .annotate(day=TruncDate('completed_at'))
+            .values('day')
+            .annotate(value=Count('id'))
+            .order_by('day')
+        )
+        activity_map = {row['day'].isoformat(): row['value'] for row in activity_qs}
+
+        day_labels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+        activity = []
+        for i in range(7):
+            d = (seven_days_ago + timedelta(days=i)).date()
+            activity.append({
+                'day': day_labels[d.weekday() if d.weekday() != 6 else 6]
+                       if d.weekday() != 6 else 'Dom',
+                'date': d.isoformat(),
+                'value': activity_map.get(d.isoformat(), 0),
+            })
+        # Corrige label de domingo (isoweekday: seg=0..dom=6)
+        weekday_map = {0: 'Seg', 1: 'Ter', 2: 'Qua', 3: 'Qui', 4: 'Sex', 5: 'Sáb', 6: 'Dom'}
+        activity = []
+        for i in range(7):
+            d = (seven_days_ago + timedelta(days=i)).date()
+            activity.append({
+                'day': weekday_map[d.weekday()],
+                'date': d.isoformat(),
+                'value': activity_map.get(d.isoformat(), 0),
+            })
+
+        # ── Cursos mais populares (mais matrículas) ───────────
+        top_courses = (
+            Course.objects
+            .filter(is_active=True)
+            .annotate(enrollments=Count('user_progress'))
+            .order_by('-enrollments')[:5]
+            .values('name', 'enrollments')
+        )
+
+        return Response({
+            'courses': {
+                'total': total_courses,
+                'active': active_courses,
+                'with_exam': courses_with_exam,
+            },
+            'enrollments': {
+                'total': total_enrollments,
+                'completed': completed,
+                'in_progress': in_progress,
+                'not_started': total_enrollments - completed - in_progress,
+            },
+            'exams': {
+                'submitted': exams_submitted,
+                'passed': exams_passed,
+                'approval_rate': approval_rate,
+                'avg_score': avg_exam_score,
+            },
+            'certificates': {
+                'total': total_certificates,
+            },
+            'activity': activity,
+            'top_courses': list(top_courses),
+        })
